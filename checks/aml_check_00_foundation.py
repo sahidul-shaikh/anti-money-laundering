@@ -10,6 +10,7 @@ import json
 import re
 import sys
 
+from aml.core.mode import SYNTHETIC_ONLY
 from aml.corpus import build_corpus, render, summarise, write_corpus
 from aml.corpus.model import CLOSE, ESCALATE, REAL, SYNTHETIC
 from aml.llm.bedrock import BedrockProvider, ProviderError
@@ -33,17 +34,24 @@ def check(name: str, condition: bool, detail: str = "") -> None:
         failures.append(name)
 
 
-print("corpus")
+# Real extract locally; synthetic escalations stand in for it in CI.
+EXPECTED = (
+    {"total": 42, "real": 0, "synthetic": 42, "escalate": 7, "close": 35, "hero": 5}
+    if SYNTHETIC_ONLY else
+    {"total": 70, "real": 35, "synthetic": 35, "escalate": 35, "close": 35, "hero": 10}
+)
+
+print(f"corpus ({'synthetic only' if SYNTHETIC_ONLY else 'real extract plus synthetic'})")
 corpus = build_corpus()
 summary = summarise(corpus)
-check("70 alerts", summary["total"] == 70, str(summary["total"]))
-check("35 real, 35 synthetic",
-      summary["real"] == 35 and summary["synthetic"] == 35,
+check(f"{EXPECTED['total']} alerts", summary["total"] == EXPECTED["total"], str(summary["total"]))
+check(f"{EXPECTED['real']} real, {EXPECTED['synthetic']} synthetic",
+      summary["real"] == EXPECTED["real"] and summary["synthetic"] == EXPECTED["synthetic"],
       f"{summary['real']}/{summary['synthetic']}")
 check("both classes present",
-      summary["escalate"] == 35 and summary["close"] == 35,
+      summary["escalate"] == EXPECTED["escalate"] and summary["close"] == EXPECTED["close"],
       f"escalate {summary['escalate']}, close {summary['close']}")
-check("10 hero alerts", summary["hero"] == 10, str(summary["hero"]))
+check(f"{EXPECTED['hero']} hero alerts", summary["hero"] == EXPECTED["hero"], str(summary["hero"]))
 check("six scenarios", len(summary["scenarios"]) == 6, ",".join(summary["scenarios"]))
 
 print("\nscenario code carries no signal")
@@ -58,8 +66,9 @@ hero = [a for a in corpus if a.hero]
 check("hero set spans both classes",
       {a.label for a in hero} == {ESCALATE, CLOSE},
       f"{sum(a.label == ESCALATE for a in hero)} escalate, {sum(a.label == CLOSE for a in hero)} close")
-check("hero set spans both provenances",
-      {a.provenance for a in hero} == {REAL, SYNTHETIC})
+if not SYNTHETIC_ONLY:
+    check("hero set spans both provenances",
+          {a.provenance for a in hero} == {REAL, SYNTHETIC})
 
 print("\nreferences")
 for alert in corpus:
@@ -92,7 +101,7 @@ check("pricing arithmetic", round(premium.cost(1_000_000, 0), 4) == 0.5,
 
 print("\nbedrock, live")
 provider = BedrockProvider()
-subject = next(a for a in corpus if a.hero and a.provenance == REAL)
+subject = next(a for a in corpus if a.hero and a.label == ESCALATE)
 try:
     completion = provider.complete(routable[0], SYSTEM, render(subject), max_tokens=900)
     check("cheap tier answered", bool(completion.text),
@@ -109,8 +118,11 @@ try:
 except ProviderError as exc:
     check("cheap tier answered", False, str(exc)[:110])
 
-path = write_corpus(corpus)
-print(f"\nwrote {path.relative_to(path.parents[2])}")
+if SYNTHETIC_ONLY:
+    print("\ncorpus snapshot not written (synthetic-only mode)")
+else:
+    path = write_corpus(corpus)
+    print(f"\nwrote {path.relative_to(path.parents[2])}")
 
 print(f"\n{'ALL CHECKS PASS' if not failures else 'FAILURES: ' + ', '.join(failures)}")
 sys.exit(1 if failures else 0)

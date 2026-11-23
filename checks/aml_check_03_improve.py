@@ -111,9 +111,9 @@ alert = next(a for a in corpus if len(a.transactions) == 1)
 check("features come from the alert, not the label",
       "single_transaction" in mining.features(alert, 0))
 check("siblings are a feature", "party_has_other_alerts" in mining.features(alert, 2))
-sibling = next(a for a in corpus if a.alert_id == "11368")
+subject = next(a for a in corpus if a.hero)
 check("features are deterministic",
-      mining.features(sibling, 2) == mining.features(sibling, 2))
+      mining.features(subject, 2) == mining.features(subject, 2))
 
 fake_outcomes = [
     SimpleNamespace(alert_id=a.alert_id, correct=False, label=a.label,

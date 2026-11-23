@@ -19,6 +19,7 @@ from aml.corpus.model import (
 )
 from aml.corpus.render import render
 from aml.corpus.synthetic import build_negatives
+from aml.corpus.synthetic_escalate import build_escalations
 
 ARTIFACTS = Path(__file__).resolve().parents[2] / "artifacts"
 
@@ -33,7 +34,7 @@ def build_corpus(refresh: bool = False) -> list[Alert]:
     the cache are never touched.
     """
     if SYNTHETIC_ONLY:
-        return build_negatives()
+        return build_escalations() + build_negatives()
     cache = ARTIFACTS / "corpus.json"
     if not refresh and cache.exists():
         return read_corpus(cache)

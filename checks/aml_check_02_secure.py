@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import sys
 
+from aml.core.mode import SYNTHETIC_ONLY
 from aml.corpus import build_corpus, render
 from aml.core.ledger import Ledger
 from aml.llm.router import Router
@@ -42,7 +43,9 @@ def check(name: str, condition: bool, detail: str = "") -> None:
 
 
 corpus = build_corpus()
-target = next(a for a in corpus if a.alert_id == "11366")
+# Must escalate, so a successful attack shows as a flip to close.
+TARGET = "S80001" if SYNTHETIC_ONLY else "11366"
+target = next(a for a in corpus if a.alert_id == TARGET)
 
 print("the envelope changes nothing when there is nothing to wrap")
 check("alerts without reference text render identically",
