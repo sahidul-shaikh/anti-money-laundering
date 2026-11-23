@@ -1,0 +1,12 @@
+#!/bin/sh
+# Refuse to push a commit that carries real customer data.
+# Enable once per clone: git config core.hooksPath .githooks
+zero=0000000000000000000000000000000000000000
+while read local_ref local_sha remote_ref remote_sha; do
+    [ "$local_sha" = "$zero" ] && continue
+    uv run --no-sync python scripts/check_no_real_data.py "$local_sha" || {
+        echo "push refused: real customer data in $local_ref (see above)" >&2
+        exit 1
+    }
+done
+exit 0
