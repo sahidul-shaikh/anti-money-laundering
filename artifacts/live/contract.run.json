@@ -1,0 +1,55 @@
+{
+  "phase_id": "contract",
+  "model": "sonnet",
+  "rules_withheld": false,
+  "finished_at": "2026-11-11 22:25:09",
+  "events": [
+    {
+      "kind": "starting",
+      "elapsed_s": 0.0,
+      "text": "",
+      "data": {
+        "phase_id": "contract",
+        "name": "Value contract",
+        "artifact": "C:\\Users\\sahidul.i.shaikh\\OneDrive - Accenture\\Documents\\Project\\AI_For_AI\\artifacts\\builds\\aml-alert-investigator\\contract.md",
+        "prompt_chars": 4664,
+        "prompt": "You are one specialist stage of an AI engineering factory.\n\nWHAT IS BEING BUILT (stated by a human, not inferred)\n  Product:  AML Alert Investigator\n  Domain:   Anti-money laundering transaction monitoring, US retail bank financial crime operations\n  Users:    Level-1 AML analysts act on the recommendation; model risk reviewers must sign off the solution before production\n\n  The transaction monitoring estate fires several thousand alerts a day, over 95% of which close with no further action, and a Level-1 analyst spends 20 to 40 minutes per alert assembling evidence, deciding disposition and writing a rationale, at a cost of \u00a317.00 per alert. The factory must build an agent that takes one alert and produces a disposition with evidence across six in-scope scenarios, so an analyst reviews a recommendation instead of starting from nothing.\n\nCONSTRAINTS\n  - Every claim the agent makes must cite transaction references that exist in the alert it was given, and a citation not present in the data is a defect, not a stylistic issue.\n  - The agent may never close an alert by itself; a human reviews every escalation and every close.\n  - Disclosing that a party is under a suspicious activity report is a criminal offence under 31 U.S.C. 5318(g)(2), and this must be impossible by construction, not discouraged by instruction.\n  - Payment reference and remittance free text is written by whoever sent the payment and must be treated as evidence to be reported, never as instruction to be followed.\n  - Detection follows the Actimize AML-SAM defaults for the AML-STR and AML-ECT models; the team is not inventing its own thresholds.\n  - Every disposition must be reproducible from what was recorded.\n  - Minimum recall is 90% of alerts that should escalate, and minimum accuracy is 85%.\n  - Target cost is \u00a312.00 per alert, down from a \u00a317.00 baseline.\n  - Only credits are considered for the deposit-structuring rule; debits are ignored.\n  - Boundaries for the structuring rule are inclusive of the lower bound and inclusive of the upper bound; a transaction of exactly 10,000.00 does not qualify and is out of scope for this rule.\n  - A window of window_days spans that many calendar days inclusive of both endpoints.\n  - Alert generation and threshold tuning in the monitoring system are out of scope.\n  - Changes to the case management system are out of scope.\n  - Filing to FinCEN is out of scope \u2014 the agent drafts, a human files.\n  - Sanctions and watchlist screening are out of scope.\n\nSOURCE MATERIAL THE HUMAN HAS PROVIDED\n  - Actimize AML-SAM default parameters for the AML-STR and AML-ECT models\n  - Actimize AML-STR rule AML-STR-CCE-INN-A-D01-DST specification (lower bound 8,000; upper bound 9,999.99; occurrences 3; window 14 days)\n\nYOUR STAGE: Value contract\nBRIEF: Write the value contract for the product described above. State the measured baseline cost per unit of work, the target, the quality floor below which it must not be deployed, and the telemetry that will prove realisation. Use the numbers the brief gives you and be specific.\n\nYour output must contain these exact section headings, in capitals: BASELINE, TARGET, QUALITY FLOOR, TELEMETRY.\nWrite the document only. No preamble, no commentary, no code fences around the whole thing. Markdown headings are fine.\nBe concrete and numerate. This document is read by engineers and by a model risk reviewer.\n\nHOW THIS DISCIPLINE IS DONE\n\n--- skill: value-contract ---\n# Skill: writing a value contract\n\nUse when a build is being funded and nobody has yet written down what success is.\n\n## Procedure\n\n1. State the **baseline** as a measured number with its unit of work, not an\n   adjective. \"GBP 17.00 per alert, one analyst review, every time\" - not \"costly\".\n2. State the **target** as a number against the same unit, so the two can be\n   subtracted.\n3. State the **quality floor** separately from the target. The floor is the level\n   below which the thing must not be deployed at any price. Name the metric that\n   carries it and say why that metric and not another.\n4. State the **telemetry** that will prove realisation, naming the layer each\n   measure sits at. A target with no telemetry is an aspiration.\n5. State who signs it.\n\n## What good looks like\n\n- Every number has a unit and a source\n- The floor is expressed so that a saving cannot be traded against it\n- A reader can tell, from the contract alone, what evidence would settle an\n  argument about whether the build worked\n\n## Common failures\n\n- Targets expressed as percentages with no denominator\n- A single blended \"accuracy\" that hides the asymmetry between the two error types\n- Telemetry listed as \"dashboards\"\n\n",
+        "markers": [
+          "BASELINE",
+          "TARGET",
+          "QUALITY FLOOR",
+          "TELEMETRY"
+        ],
+        "tokens": [],
+        "model": "sonnet"
+      }
+    },
+    {
+      "kind": "booting",
+      "elapsed_s": 36.74,
+      "text": "first token",
+      "data": {
+        "boot_s": 36.7
+      }
+    },
+    {
+      "kind": "done",
+      "elapsed_s": 57.16,
+      "text": "",
+      "data": {
+        "cost_usd": 0.06852,
+        "turns": 1,
+        "chars": 5459,
+        "duration_s": 57.2,
+        "evaluation": {
+          "phase_id": "contract",
+          "passed": true,
+          "missing": [],
+          "length": 5459,
+          "reason": "all 4 sections and 0 identifiers present"
+        },
+        "exit_code": 0
+      }
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+[project]
+name = "ai-for-ai"
+version = "0.1.0"
+description = "AI Engineering Factory demo: AI builds, runs, improves and secures AI"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "boto3>=1.43.126",
+    "openpyxl>=3.1.5",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["aml"]

@@ -1,0 +1,5 @@
+{
+  "asset": "acceptance-trace",
+  "phase": "functional_test",
+  "product": "aml-alert-investigator"
+}

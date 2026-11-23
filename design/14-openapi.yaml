@@ -1,0 +1,645 @@
+openapi: 3.1.0
+
+info:
+  title: AML Alert Investigator API
+  version: 1.0.0
+  summary: Evidence-backed triage of transaction-monitoring alerts
+  description: |
+    Document ID: AMLI-API-002. Companion to AMLI-API-001.
+
+    The agent recommends; a human decides. No endpoint in this contract closes
+    an alert, files a report or writes to a customer. See ADR-005.
+  contact:
+    name: Financial Crime Technology
+  license:
+    name: Proprietary — Internal
+
+servers:
+  - url: https://{host}/api/v1
+    variables:
+      host:
+        default: amli.example.com
+
+security:
+  - oidc: []
+
+tags:
+  - name: Alerts
+  - name: Cases
+  - name: Decisions
+  - name: Evidence
+  - name: Runs
+  - name: Rules
+  - name: Improvement
+  - name: Operations
+
+paths:
+
+  /alerts/{alertId}:
+    parameters:
+      - $ref: '#/components/parameters/AlertId'
+      - $ref: '#/components/parameters/TraceId'
+    get:
+      tags: [Alerts]
+      operationId: getAlert
+      summary: Retrieve one alert with its context
+      responses:
+        '200':
+          description: The alert, party, account and transactions
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Alert' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /alerts/{alertId}/recommendation:
+    parameters:
+      - $ref: '#/components/parameters/AlertId'
+    get:
+      tags: [Alerts]
+      operationId: getRecommendation
+      summary: The agent's recommendation, reasoning, findings and citations
+      responses:
+        '200':
+          description: Recommendation with findings
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Recommendation' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /alerts/{alertId}/investigate:
+    parameters:
+      - $ref: '#/components/parameters/AlertId'
+      - $ref: '#/components/parameters/IdempotencyKey'
+    post:
+      tags: [Operations]
+      operationId: investigateAlert
+      summary: Start a new investigation run (operator replay)
+      description: >
+        Always creates a new run. Never overwrites a previous run, so the
+        historic record stays reconstructable.
+      responses:
+        '202':
+          description: Run accepted
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RunRef' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /searches/alerts:
+    post:
+      tags: [Alerts]
+      operationId: searchAlerts
+      summary: Filtered alert search
+      description: >
+        A POST, not a GET. Alert identifiers and party names are
+        suspicion-bearing and must not appear in query strings, which are
+        logged by intermediaries.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AlertSearch' }
+      responses:
+        '200':
+          description: A page of alerts
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AlertPage' }
+
+  /cases:
+    post:
+      tags: [Cases]
+      operationId: createCase
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CaseCreate' }
+      responses:
+        '201':
+          description: Case created
+          headers:
+            Location: { schema: { type: string, format: uri } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Case' }
+
+  /cases/{caseId}/alerts:
+    parameters:
+      - $ref: '#/components/parameters/CaseId'
+    post:
+      tags: [Cases]
+      operationId: linkAlertToCase
+      summary: Link an alert into a case
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [alertId, reason]
+              properties:
+                alertId: { type: string, format: uuid }
+                reason:
+                  type: string
+                  minLength: 10
+                  description: Why these alerts belong to one investigation. Mandatory (FR-055).
+      responses:
+        '201':
+          description: Linked
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CaseAlertLink' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+    delete:
+      tags: [Cases]
+      operationId: unlinkAlertFromCase
+      summary: Unlink an alert, preserving the link history
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [alertId, reason]
+              properties:
+                alertId: { type: string, format: uuid }
+                reason: { type: string, minLength: 10 }
+      responses:
+        '200': { description: Unlinked; the link row is retained with unlinkedAt set }
+
+  /decisions:
+    post:
+      tags: [Decisions]
+      operationId: recordDecision
+      summary: Record a human decision on a recommendation
+      description: >
+        The only way an alert reaches the `decided` state. The acting principal
+        must be a human actor; a system principal is refused at the database
+        (BR-003).
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - name: If-Match
+          in: header
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DecisionCreate' }
+      responses:
+        '201':
+          description: Decision recorded
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Decision' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+
+  /evidence/{evidenceId}/content:
+    parameters:
+      - name: evidenceId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [Evidence]
+      operationId: getEvidenceContent
+      summary: The captured snapshot, as the agent saw it
+      description: >
+        Served from the write-once object store, never re-queried from source.
+        Every access records an access purpose.
+      parameters:
+        - name: X-Access-Purpose
+          in: header
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: The snapshot
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
+            X-Content-Hash:
+              schema: { type: string, pattern: '^[0-9a-f]{64}$' }
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+
+  /runs/{runId}:
+    parameters:
+      - name: runId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [Runs]
+      operationId: getRun
+      summary: Full reconstruction of one investigation run
+      responses:
+        '200':
+          description: Run with calls, controls and evidence accesses
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Run' }
+
+  /rules/{scenarioCode}:
+    parameters:
+      - name: scenarioCode
+        in: path
+        required: true
+        schema: { type: string, example: SAS10014 }
+      - name: effectiveOn
+        in: query
+        schema: { type: string, format: date }
+    get:
+      tags: [Rules]
+      operationId: getRule
+      summary: The detection rule in force for a scenario on a date
+      responses:
+        '200':
+          description: Rule specification with source citation
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Rule' }
+
+  /proposals/{proposalId}/approval:
+    parameters:
+      - name: proposalId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      tags: [Improvement]
+      operationId: approveProposal
+      summary: Approve or refuse a change proposal
+      description: >
+        Refused automatically when the evaluation shows recall below the floor,
+        whatever the cost benefit (FR-082).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [decision, evaluationRunId, rationale]
+              properties:
+                decision: { type: string, enum: [approve, refuse] }
+                evaluationRunId: { type: string, format: uuid }
+                rationale: { type: string, minLength: 20 }
+      responses:
+        '201': { description: Approval recorded }
+        '422':
+          description: Refused by the gate — recall below the floor
+
+  /health:
+    get:
+      tags: [Operations]
+      operationId: health
+      security: []
+      responses:
+        '200': { description: Liveness }
+
+components:
+
+  securitySchemes:
+    oidc:
+      type: openIdConnect
+      openIdConnectUrl: https://idp.example.com/.well-known/openid-configuration
+
+  parameters:
+    AlertId:
+      name: alertId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    CaseId:
+      name: caseId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema: { type: string, minLength: 16, maxLength: 128 }
+    TraceId:
+      name: X-Trace-Id
+      in: header
+      required: false
+      schema: { type: string }
+
+  headers:
+    ETag:
+      schema: { type: string }
+
+  schemas:
+
+    Money:
+      type: object
+      required: [amount, currency]
+      properties:
+        amount:
+          type: string
+          pattern: '^-?\d+\.\d{2,6}$'
+          description: A string, to avoid floating-point round-tripping.
+        currency: { type: string, minLength: 3, maxLength: 3 }
+
+    Party:
+      type: object
+      properties:
+        partyId: { type: string, format: uuid }
+        partyType: { type: string, enum: [individual, organisation] }
+        legalName: { type: string }
+        dateOfBirth: { type: string, format: date, nullable: true }
+        occupation: { type: string, nullable: true }
+        annualIncome: { $ref: '#/components/schemas/Money' }
+        countryCode: { type: string, nullable: true }
+
+    Transaction:
+      type: object
+      properties:
+        transactionId: { type: string, format: uuid }
+        externalReference:
+          type: string
+          description: The value a grounded citation must resolve to.
+        eventDate: { type: string, format: date }
+        amount: { $ref: '#/components/schemas/Money' }
+        direction: { type: string, enum: [credit, debit] }
+        medium: { type: string, nullable: true }
+        countryCode: { type: string, nullable: true }
+        referenceText:
+          type: string
+          nullable: true
+          description: >
+            Payment reference free text, preserved byte-identical. Written by a
+            third party and therefore untrusted; always rendered inside the
+            untrusted-data envelope (ADR-006).
+        referenceTextUntrusted: { type: boolean }
+
+    Alert:
+      type: object
+      description: >
+        Note the absence of outcome, adjudication and label fields. They exist
+        in the data model but are never served on this resource and never
+        rendered to a model (FR-033).
+      properties:
+        alertId: { type: string, format: uuid }
+        externalReference: { type: string }
+        scenarioCode: { type: string }
+        description: { type: string, nullable: true }
+        triggeredValues: { type: string, nullable: true }
+        runDate: { type: string, format: date }
+        raisedAt: { type: string, format: date-time }
+        status:
+          type: string
+          enum: [ingested, ready_for_investigation, investigating,
+                 awaiting_review, decided, quarantined, manual_queue]
+        party: { $ref: '#/components/schemas/Party' }
+        transactions:
+          type: array
+          items: { $ref: '#/components/schemas/Transaction' }
+
+    AlertSearch:
+      type: object
+      properties:
+        status: { type: string }
+        scenarioCode: { type: string }
+        raisedFrom: { type: string, format: date }
+        raisedTo: { type: string, format: date }
+        assignedTo: { type: string, format: uuid }
+        limit: { type: integer, minimum: 1, maximum: 200, default: 50 }
+        cursor: { type: string }
+
+    AlertPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Alert' }
+        nextCursor: { type: string, nullable: true }
+
+    Rule:
+      type: object
+      properties:
+        ruleId: { type: string }
+        detectionModel: { type: string }
+        scenarioCode: { type: string }
+        thresholds: { type: object, additionalProperties: true }
+        sourceDocument: { type: string }
+        sourcePage: { type: integer, nullable: true }
+        catalogueVersion: { type: string }
+        effectiveFrom: { type: string, format: date }
+        effectiveTo: { type: string, format: date, nullable: true }
+
+    FindingEvidence:
+      type: object
+      properties:
+        evidenceId: { type: string, format: uuid }
+        citation: { type: string }
+        stance:
+          type: string
+          enum: [supports, contradicts]
+          description: A finding may cite evidence that weighs against it.
+        resolved:
+          type: boolean
+          description: Whether the citation resolved against captured evidence.
+
+    Finding:
+      type: object
+      properties:
+        findingId: { type: string, format: uuid }
+        statement: { type: string }
+        grounded: { type: boolean }
+        reviewStatus: { type: string, enum: [draft, final, rejected] }
+        evidence:
+          type: array
+          items: { $ref: '#/components/schemas/FindingEvidence' }
+
+    Recommendation:
+      type: object
+      properties:
+        recommendationId: { type: string, format: uuid }
+        alertId: { type: string, format: uuid }
+        runId: { type: string, format: uuid }
+        disposition:
+          type: string
+          enum: [close_no_further_action, escalate_to_case, insufficient_information]
+        reasoning: { type: string }
+        confidence: { type: number, minimum: 0, maximum: 1, nullable: true }
+        groundedness: { type: number, minimum: 0, maximum: 1 }
+        citedCount: { type: integer }
+        inventedCount:
+          type: integer
+          description: Greater than zero in production is a defect, not a metric.
+        rule: { $ref: '#/components/schemas/Rule' }
+        findings:
+          type: array
+          items: { $ref: '#/components/schemas/Finding' }
+        cost: { $ref: '#/components/schemas/Money' }
+        producedAt: { type: string, format: date-time }
+
+    DecisionCreate:
+      type: object
+      required: [outcome, rationale]
+      properties:
+        alertId: { type: string, format: uuid }
+        caseId: { type: string, format: uuid }
+        recommendationId: { type: string, format: uuid }
+        outcome:
+          type: string
+          enum: [accept_recommendation, override_close, override_escalate,
+                 request_information, approve_report]
+        rationale: { type: string, minLength: 10 }
+        overrideReasonCode:
+          type: string
+          enum: [missed_context, misread_transaction_pattern,
+                 ignored_declared_income_or_occupation, wrong_rule_applied,
+                 insufficient_evidence_gathered, correct_answer_poor_reasoning,
+                 other]
+          description: Mandatory when outcome is an override.
+
+    Decision:
+      allOf:
+        - $ref: '#/components/schemas/DecisionCreate'
+        - type: object
+          properties:
+            decisionId: { type: string, format: uuid }
+            actorId: { type: string, format: uuid }
+            agreedWithRecommendation: { type: boolean }
+            supersedes: { type: string, format: uuid, nullable: true }
+            decidedAt: { type: string, format: date-time }
+
+    CaseCreate:
+      type: object
+      required: [caseType, reason]
+      properties:
+        caseType: { type: string }
+        reason: { type: string, minLength: 10 }
+        alertIds:
+          type: array
+          items: { type: string, format: uuid }
+
+    Case:
+      type: object
+      properties:
+        caseId: { type: string, format: uuid }
+        externalReference: { type: string, nullable: true }
+        caseType: { type: string }
+        status:
+          type: string
+          enum: [open, investigating, pending_review, closed, referred]
+        ownerActorId: { type: string, format: uuid, nullable: true }
+        openedAt: { type: string, format: date-time }
+        dueAt: { type: string, format: date-time, nullable: true }
+
+    CaseAlertLink:
+      type: object
+      properties:
+        caseId: { type: string, format: uuid }
+        alertId: { type: string, format: uuid }
+        linkedAt: { type: string, format: date-time }
+        linkedBy: { type: string, format: uuid }
+        unlinkedAt: { type: string, format: date-time, nullable: true }
+        reason: { type: string }
+
+    ModelCall:
+      type: object
+      properties:
+        attempt: { type: integer }
+        tier: { type: string }
+        modelIdentifier: { type: string }
+        tokensIn: { type: integer }
+        tokensOut: { type: integer }
+        tokensCached: { type: integer }
+        latencyMs: { type: integer }
+        status:
+          type: string
+          enum: [ok, provider_error, timeout, blocked, unparseable]
+        systemPromptHash: { type: string }
+        promptStorageUri: { type: string }
+
+    ControlCheck:
+      type: object
+      properties:
+        controlName: { type: string }
+        phase: { type: string, enum: [pre_call, post_call, pre_tool] }
+        outcome: { type: string, enum: [allow, block, escalate] }
+        policyVersionId: { type: string, format: uuid }
+
+    Run:
+      type: object
+      properties:
+        runId: { type: string, format: uuid }
+        traceId: { type: string }
+        status:
+          type: string
+          enum: [running, completed, failed, aborted_budget, aborted_control]
+        deploymentId: { type: string, format: uuid, nullable: true }
+        ruleCatalogueVersion: { type: string }
+        agentConfigHash: { type: string }
+        escalations: { type: integer }
+        cost: { $ref: '#/components/schemas/Money' }
+        startedAt: { type: string, format: date-time }
+        endedAt: { type: string, format: date-time, nullable: true }
+        calls:
+          type: array
+          items: { $ref: '#/components/schemas/ModelCall' }
+        controls:
+          type: array
+          items: { $ref: '#/components/schemas/ControlCheck' }
+
+    RunRef:
+      type: object
+      properties:
+        runId: { type: string, format: uuid }
+        status: { type: string }
+
+    Problem:
+      type: object
+      properties:
+        type: { type: string, format: uri }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        instance: { type: string }
+        traceId: { type: string }
+        violations:
+          type: array
+          items:
+            type: object
+            properties:
+              field: { type: string }
+              code: { type: string }
+
+  responses:
+    NotFound:
+      description: >
+        Not found, or not visible in the caller's jurisdiction. The two are
+        deliberately indistinguishable so that the existence of an
+        investigation is not disclosed.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Forbidden:
+      description: Authenticated but not permitted
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Conflict:
+      description: Version conflict, or idempotency key reused with a different body
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Unprocessable:
+      description: Semantically invalid, including domain-rule violations
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }

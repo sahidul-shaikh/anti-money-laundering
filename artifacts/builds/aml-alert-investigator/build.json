@@ -1,0 +1,290 @@
+{
+  "product": "aml-alert-investigator",
+  "phases_total": 12,
+  "phases_passed": 12,
+  "gates": [
+    "contract",
+    "spec",
+    "model_risk",
+    "deployment"
+  ],
+  "cost_usd": 1.11977,
+  "duration_ms": 767458,
+  "library": {
+    "created": 0,
+    "inherited": 18,
+    "total": 18,
+    "reuse_rate": 1.0,
+    "created_names": [],
+    "inherited_names": [
+      "acceptance-criteria-pattern",
+      "acceptance-trace",
+      "agent-loop-pattern",
+      "aml-threat-library",
+      "eval-families",
+      "graph-gate-pattern",
+      "paired-sign-test",
+      "parse-and-grade",
+      "probe-catalogue",
+      "review-checklist",
+      "rollback-procedure",
+      "sr11-7-template",
+      "telemetry-contract",
+      "trust-boundary-pattern",
+      "ungrantable-scopes",
+      "untrusted-data-envelope",
+      "value-contract-template",
+      "verdict-schema"
+    ],
+    "on_disk": 18
+  },
+  "results": [
+    {
+      "phase_id": "contract",
+      "name": "Value contract",
+      "artifact": "builds\\aml-alert-investigator\\contract.md",
+      "evaluation": {
+        "phase_id": "contract",
+        "passed": true,
+        "missing": [],
+        "length": 7326,
+        "reason": "all 4 sections and 0 identifiers present"
+      },
+      "cost_usd": 0.03516,
+      "duration_ms": 39601,
+      "gated": true,
+      "approved_by": "Head of Financial Crime Technology",
+      "assets_created": [],
+      "assets_inherited": [
+        "value-contract-template"
+      ]
+    },
+    {
+      "phase_id": "spec",
+      "name": "Specification and threat model",
+      "artifact": "builds\\aml-alert-investigator\\spec.md",
+      "evaluation": {
+        "phase_id": "spec",
+        "passed": true,
+        "missing": [],
+        "length": 20460,
+        "reason": "all 2 sections and 2 identifiers present"
+      },
+      "cost_usd": 0.11153,
+      "duration_ms": 89102,
+      "gated": true,
+      "approved_by": "Head of Financial Crime Technology",
+      "assets_created": [],
+      "assets_inherited": [
+        "acceptance-criteria-pattern",
+        "aml-threat-library"
+      ]
+    },
+    {
+      "phase_id": "architecture",
+      "name": "Architecture",
+      "artifact": "builds\\aml-alert-investigator\\arch.md",
+      "evaluation": {
+        "phase_id": "architecture",
+        "passed": true,
+        "missing": [],
+        "length": 10392,
+        "reason": "all 3 sections and 0 identifiers present"
+      },
+      "cost_usd": 0.08428,
+      "duration_ms": 55788,
+      "gated": false,
+      "approved_by": "",
+      "assets_created": [],
+      "assets_inherited": [
+        "trust-boundary-pattern"
+      ]
+    },
+    {
+      "phase_id": "agent_design",
+      "name": "Agent graph and loop",
+      "artifact": "builds\\aml-alert-investigator\\agent.md",
+      "evaluation": {
+        "phase_id": "agent_design",
+        "passed": true,
+        "missing": [],
+        "length": 12782,
+        "reason": "all 4 sections and 0 identifiers present"
+      },
+      "cost_usd": 0.09736,
+      "duration_ms": 65595,
+      "gated": false,
+      "approved_by": "",
+      "assets_created": [],
+      "assets_inherited": [
+        "agent-loop-pattern",
+        "graph-gate-pattern"
+      ]
+    },
+    {
+      "phase_id": "context",
+      "name": "Context design",
+      "artifact": "builds\\aml-alert-investigator\\context.md",
+      "evaluation": {
+        "phase_id": "context",
+        "passed": true,
+        "missing": [],
+        "length": 8181,
+        "reason": "all 3 sections and 0 identifiers present"
+      },
+      "cost_usd": 0.08353,
+      "duration_ms": 56539,
+      "gated": false,
+      "approved_by": "",
+      "assets_created": [],
+      "assets_inherited": [
+        "untrusted-data-envelope"
+      ]
+    },
+    {
+      "phase_id": "development",
+      "name": "Implementation",
+      "artifact": "builds\\aml-alert-investigator\\implementation.md",
+      "evaluation": {
+        "phase_id": "development",
+        "passed": true,
+        "missing": [],
+        "length": 9609,
+        "reason": "all 3 sections and 0 identifiers present"
+      },
+      "cost_usd": 0.07699,
+      "duration_ms": 46935,
+      "gated": false,
+      "approved_by": "",
+      "assets_created": [],
+      "assets_inherited": [
+        "verdict-schema",
+        "parse-and-grade"
+      ]
+    },
+    {
+      "phase_id": "security_review",
+      "name": "Security review",
+      "artifact": "builds\\aml-alert-investigator\\security_review.md",
+      "evaluation": {
+        "phase_id": "security_review",
+        "passed": true,
+        "missing": [],
+        "length": 17072,
+        "reason": "all 3 sections and 0 identifiers present"
+      },
+      "cost_usd": 0.11707,
+      "duration_ms": 80826,
+      "gated": false,
+      "approved_by": "",
+      "assets_created": [],
+      "assets_inherited": [
+        "probe-catalogue",
+        "ungrantable-scopes"
+      ]
+    },
+    {
+      "phase_id": "evaluation",
+      "name": "Evaluation design",
+      "artifact": "builds\\aml-alert-investigator\\evaluation.md",
+      "evaluation": {
+        "phase_id": "evaluation",
+        "passed": true,
+        "missing": [],
+        "length": 10133,
+        "reason": "all 4 sections and 0 identifiers present"
+      },
+      "cost_usd": 0.09492,
+      "duration_ms": 65384,
+      "gated": false,
+      "approved_by": "",
+      "assets_created": [],
+      "assets_inherited": [
+        "eval-families",
+        "paired-sign-test"
+      ]
+    },
+    {
+      "phase_id": "code_review",
+      "name": "Code review",
+      "artifact": "builds\\aml-alert-investigator\\code_review.md",
+      "evaluation": {
+        "phase_id": "code_review",
+        "passed": true,
+        "missing": [],
+        "length": 10147,
+        "reason": "all 3 sections and 0 identifiers present"
+      },
+      "cost_usd": 0.11769,
+      "duration_ms": 79706,
+      "gated": false,
+      "approved_by": "",
+      "assets_created": [],
+      "assets_inherited": [
+        "review-checklist"
+      ]
+    },
+    {
+      "phase_id": "model_risk",
+      "name": "Model risk documentation",
+      "artifact": "builds\\aml-alert-investigator\\model_risk.md",
+      "evaluation": {
+        "phase_id": "model_risk",
+        "passed": true,
+        "missing": [],
+        "length": 15295,
+        "reason": "all 4 sections and 0 identifiers present"
+      },
+      "cost_usd": 0.11778,
+      "duration_ms": 66287,
+      "gated": true,
+      "approved_by": "Head of Financial Crime Technology",
+      "assets_created": [],
+      "assets_inherited": [
+        "sr11-7-template"
+      ]
+    },
+    {
+      "phase_id": "functional_test",
+      "name": "Functional test",
+      "artifact": "builds\\aml-alert-investigator\\functional_test.md",
+      "evaluation": {
+        "phase_id": "functional_test",
+        "passed": true,
+        "missing": [],
+        "length": 9902,
+        "reason": "all 2 sections and 1 identifiers present"
+      },
+      "cost_usd": 0.0997,
+      "duration_ms": 66578,
+      "gated": false,
+      "approved_by": "",
+      "assets_created": [],
+      "assets_inherited": [
+        "acceptance-trace"
+      ]
+    },
+    {
+      "phase_id": "deployment",
+      "name": "Deployment and runbook",
+      "artifact": "builds\\aml-alert-investigator\\deployment.md",
+      "evaluation": {
+        "phase_id": "deployment",
+        "passed": true,
+        "missing": [],
+        "length": 10624,
+        "reason": "all 4 sections and 0 identifiers present"
+      },
+      "cost_usd": 0.08375,
+      "duration_ms": 55117,
+      "gated": true,
+      "approved_by": "Head of Financial Crime Technology",
+      "assets_created": [],
+      "assets_inherited": [
+        "telemetry-contract",
+        "rollback-procedure"
+      ]
+    }
+  ],
+  "partial": false
+}

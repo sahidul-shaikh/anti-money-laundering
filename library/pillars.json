@@ -1,0 +1,279 @@
+{
+  "product": "AI Engineering Factory",
+  "owner": "Accenture",
+  "reference_build": "AML alert investigator",
+  "pillars": [
+    {
+      "id": "builds",
+      "index": 1,
+      "title": "AI builds AI",
+      "verb": "ships",
+      "promise": "From individual craftsmanship into a repeatable AI engineering factory.",
+      "status": "live",
+      "next": "runs",
+      "disciplines": [
+        {
+          "id": "specs",
+          "n": "01",
+          "title": "Specs",
+          "claim": "One human writes the requirement. Nothing downstream is hardcoded.",
+          "proof": "A human-authored requirements document is the only input to the factory. Stage 0 reads it with Claude Code and extracts a structured brief; a human approves that brief; every one of the twelve stages is then handed it. Change the document, re-read it, and the whole factory changes with it.",
+          "mode": "live",
+          "evidence": [
+            "PRD.md",
+            "aml/build/brief.py"
+          ],
+          "watch_for": "The brief is extracted by a model but approved by a person. The approval is the control."
+        },
+        {
+          "id": "context",
+          "n": "02",
+          "title": "Context",
+          "claim": "Each stage is sent a precise, auditable context window - readable before it runs.",
+          "proof": "A stage prompt is assembled from five parts: the standing preamble, the approved brief, the artifacts its upstream stages produced, the skills it declares, and its own instruction. Nothing else reaches the model. You can read the exact characters without spending anything.",
+          "mode": "live",
+          "evidence": [
+            "aml/build/orchestrator.py"
+          ],
+          "watch_for": "Context is composed, not accumulated. A stage cannot see what it does not depend on."
+        },
+        {
+          "id": "skills",
+          "n": "03",
+          "title": "Skills",
+          "claim": "Procedural knowledge is a reusable file on disk, not a prompt someone remembers.",
+          "proof": "Thirteen skill files encode how each discipline is done - what good looks like, and the specific mistakes that have been made before. Each stage declares the skills it needs and they are inlined into its prompt under HOW THIS DISCIPLINE IS DONE. The skills outlive the build that produced them.",
+          "mode": "on disk",
+          "evidence": [
+            "library/aml/skills/"
+          ],
+          "watch_for": "This is the compounding asset. The code is specific to one product; the way of working is not."
+        },
+        {
+          "id": "loops",
+          "n": "04",
+          "title": "Loops",
+          "claim": "Goal, act, verify, iterate - against a contract the model cannot see.",
+          "proof": "The implementation stage writes a module and its tests, then an independent acceptance suite runs them. A failure is not reported, it is fed back as the next instruction. Three attempts, and then the gate says no.",
+          "mode": "live",
+          "evidence": [
+            "aml/build/loop.py",
+            "aml/build/code.py"
+          ],
+          "watch_for": "Withhold the rule detail and the first attempt genuinely fails. The loop, not the model, is what makes it pass."
+        },
+        {
+          "id": "graphs",
+          "n": "05",
+          "title": "Graphs",
+          "claim": "Twelve stages, fifteen dependencies, four gates. Enforced, not drawn.",
+          "proof": "Every stage declares what it depends on. The orchestrator walks that graph, forks where work is independent and joins where evidence has to be assembled, and refuses to start a stage whose upstream has not passed. Four stages are gated and stop for a human.",
+          "mode": "on disk",
+          "evidence": [
+            "aml/build/phases.py",
+            "aml/build/orchestrator.py"
+          ],
+          "watch_for": "The joins are the interesting part: model risk cannot run until evaluation, security review and code review have all produced evidence."
+        },
+        {
+          "id": "evaluation",
+          "n": "06",
+          "title": "Evaluation",
+          "claim": "Break a stage's output on purpose and watch the gate refuse it.",
+          "proof": "Documents must carry their required sections as real headings, not as a phrase buried in a paragraph. Code is judged by nineteen acceptance tests that are committed before the build and never shown to the model. Tamper with either and press re-evaluate.",
+          "mode": "live",
+          "evidence": [
+            "aml/build/evaluator.py",
+            "checks/acceptance/test_detector_contract.py"
+          ],
+          "watch_for": "The oracle is written first and withheld. That is the difference between evaluation and self-assessment."
+        }
+      ]
+    },
+    {
+      "id": "runs",
+      "index": 2,
+      "title": "AI runs AI",
+      "verb": "measures",
+      "promise": "A self-operating estate: AI takes over the routine operations.",
+      "status": "live",
+      "next": "secures",
+      "disciplines": [
+        {
+          "id": "routing",
+          "n": "01",
+          "title": "Routing",
+          "claim": "Try the cheap model first. Trust its answer only if it can point at the transactions. Escalate if it cannot.",
+          "proof": "One real call to Amazon Bedrock, in front of you. The policy starts at the cheapest model above the declared quality floor, then checks the answer against the alert's own transaction list. An answer that cites nothing, or cites a reference the alert does not contain, is not trusted and the alert is escalated to the stronger model. On the recorded corpus that policy beats both flat tiers on accuracy and recall at 85 percent of premium's spend.",
+          "mode": "live",
+          "live": true,
+          "evidence": [
+            "aml/run/routing.py",
+            "aml/llm/router.py",
+            "aml/llm/fleet.json"
+          ],
+          "watch_for": "The escalation trigger is computed, not judged. No model is asked whether the answer was any good - every cited reference is ticked off against the alert."
+        },
+        {
+          "id": "reliability",
+          "n": "02",
+          "title": "Reliability",
+          "claim": "A failed call is not a wrong answer, and must not be priced as one.",
+          "proof": "Point a tier at a model that does not exist and the call genuinely fails at Bedrock. The router records the failed attempt and moves to the next eligible model, so the alert is still dispositioned. Where no model answers, the outcome is PROVIDER_ERROR - a distinct disposition, surfaced in telemetry and priced at the cost of a human review, never as a missed report.",
+          "mode": "live",
+          "live": true,
+          "evidence": [
+            "aml/llm/router.py",
+            "aml/llm/bedrock.py",
+            "aml/core/ledger.py"
+          ],
+          "watch_for": "The first full run reported 52 of 70 alerts unparseable. It was Bedrock throttling, not model quality. Adaptive retry took accuracy from 17.1 to 57.1 percent."
+        },
+        {
+          "id": "observability",
+          "n": "03",
+          "title": "Observability",
+          "claim": "Uptime and error rate answer none of the questions a regulator asks about an AI control.",
+          "proof": "Five layers, recorded for every run: SYSTEM (availability, latency, provider errors), MODEL (tokens, spend, model mix), AGENT (groundedness, invented citations, unparseable answers, confidence), TRANSACTION (accuracy, recall, specificity, and accuracy per scenario), and VALUE (cost per outcome against the manual baseline).",
+          "mode": "recorded",
+          "evidence": [
+            "aml/run/telemetry.py",
+            "artifacts/run_baseline.json"
+          ],
+          "watch_for": "Scenario SAS10050 scores 53.6 percent accuracy against 93.8 for SAS10014. An aggregate number would have hidden that entirely."
+        },
+        {
+          "id": "finops",
+          "n": "04",
+          "title": "FinOps",
+          "claim": "Token spend is not the cost. Cost per correctly handled alert is the cost.",
+          "proof": "Every call is priced from the AWS Price List API and written to a ledger. The number that matters is cost per outcome in pounds - model spend plus the human handling each disposition implies, where a missed escalation costs far more than a review. Measured against a 17.00 pound manual baseline and a 12.00 pound contractual target.",
+          "mode": "recorded",
+          "evidence": [
+            "aml/core/ledger.py",
+            "aml/llm/fleet.py",
+            "aml/improve/tokenomics.py"
+          ],
+          "watch_for": "At launch the agent costs MORE than the analyst it replaces - 18.77 pounds against 17.00. That is measured, not hidden, and it is what the Improve pillar has to close."
+        }
+      ]
+    },
+    {
+      "id": "secures",
+      "index": 3,
+      "title": "AI secures AI",
+      "verb": "guards",
+      "promise": "Security is engineered into every stage and continuously hardened by learning.",
+      "status": "live",
+      "next": "improves",
+      "disciplines": [
+        {
+          "id": "threat-modelling",
+          "n": "01",
+          "title": "Threat modelling",
+          "claim": "The threats are named before the build, by the stage that cannot proceed without naming them.",
+          "proof": "Stage 2 of the factory cannot pass its evaluator unless it produces a THREAT MODEL section carrying identified threats. The threat library it works from is a skill file on disk, so the next product inherits it rather than rediscovering it. Nine threats are named for this product, each with a control and a residual risk.",
+          "mode": "on disk",
+          "evidence": [
+            "library/aml/skills/threat-modelling.md",
+            "artifacts/builds/aml-alert-investigator/spec.md"
+          ],
+          "watch_for": "This is not a document someone wrote afterwards. The build gate would have blocked without it, and you can prove that in the Builds pillar by renaming the heading."
+        },
+        {
+          "id": "runtime-defense",
+          "n": "02",
+          "title": "Runtime defense",
+          "claim": "Untrusted text is not filtered. It is labelled, so it arrives as evidence rather than as an instruction.",
+          "proof": "A filter has to recognise an attack, which is a losing game against anyone who can rephrase. The envelope does not try: it wraps text written by outsiders in a label that says who wrote it and what it is for. Alongside it sit six capabilities defined as ungrantable - a request for one raises rather than returning a token, so no amount of persuasion reaches them.",
+          "mode": "on disk",
+          "evidence": [
+            "aml/security/envelope.py",
+            "aml/security/tools.py"
+          ],
+          "watch_for": "The agent has no tools today, so the ungrantable scopes guard nothing yet. They are the right shape for when tools arrive, and P-05 tests the thing that is reachable: whether the agent falsely claims to have acted."
+        },
+        {
+          "id": "swarm",
+          "n": "03",
+          "title": "Pen-testing",
+          "claim": "An attacker writes into the one field they control. Unprotected it works; framed as untrusted text it does not.",
+          "proof": "Five injection payloads with deterministic judges - a regex or a disposition comparison, never a model asked for its opinion. Three controls that need no model at all. Two probes declared but not executed, because the apparatus to run them honestly does not exist here. Anything that looks exploited is fired again before it is believed, and anything that does not reproduce is discarded rather than published.",
+          "mode": "live",
+          "live": true,
+          "evidence": [
+            "aml/security/swarm.py",
+            "aml/security/tools.py",
+            "artifacts/run_attacks.json"
+          ],
+          "watch_for": "One finding in the recorded sweep did not reproduce on re-run and was thrown away. A pen test that only reports hits is marketing."
+        }
+      ]
+    },
+    {
+      "id": "improves",
+      "index": 4,
+      "title": "AI improves AI",
+      "verb": "optimizes",
+      "promise": "Every production cycle makes the AI estate measurably better.",
+      "status": "live",
+      "next": "builds",
+      "disciplines": [
+        {
+          "id": "harness",
+          "n": "01",
+          "title": "Harness",
+          "claim": "One mistake, one fix, and the same alert answered again.",
+          "proof": "The same configuration run twice on this corpus moves several accuracy points and flips six of seventy alerts. So changes are judged on a paired per-alert comparison with a two-sided sign test, not on an aggregate percentage, and every configuration is run more than once with the per-alert majority taken. Pick a proposal and watch it measured live against the alerts that provoked it.",
+          "mode": "live",
+          "live": true,
+          "evidence": [
+            "aml/improve/optimise.py",
+            "aml/improve/live.py"
+          ],
+          "watch_for": "The live subset shows the mechanism, not the statistics. A dozen alerts cannot produce the six one-way flips significance needs - and the gate says so rather than pretending."
+        },
+        {
+          "id": "failure-mining",
+          "n": "02",
+          "title": "Failure mining",
+          "claim": "The same mistake, made repeatedly, grouped by what the alert looks like.",
+          "proof": "Failures are clustered on observable features - the shape of the activity, the party type, how many sibling alerts exist - because a cluster built on the label is circular and tells you nothing you can act on. A cluster is only reported above a materiality floor: the miner declines to change a regulated control on the evidence of two examples.",
+          "mode": "recorded",
+          "evidence": [
+            "aml/improve/mining.py",
+            "artifacts/run_improve.json"
+          ],
+          "watch_for": "One cluster has no attributed cause and says so. Three missed escalations on unremarkable-looking activity is a finding for an analyst, not a prompt change."
+        },
+        {
+          "id": "tokenomics",
+          "n": "03",
+          "title": "Tokenomics",
+          "claim": "The instructions every call carries, measured and then made smaller.",
+          "proof": "Four spend clusters mined from the token ledger, each with a measured share and a costed lever. Two were refused on measurement - routing everything to the cheap tier costs 14.3 accuracy points, and the cheapest model in the fleet misses most suspicious activity. The fixed instruction prefix is 47 percent of input spend and is measured live, here, with two real calls.",
+          "mode": "live",
+          "live": true,
+          "evidence": [
+            "aml/improve/tokenomics.py",
+            "aml/core/ledger.py"
+          ],
+          "watch_for": "The obvious saving is the one the gate refused. A cost proposal carries the burden of showing quality was kept - the quality bar does not move to let it through."
+        },
+        {
+          "id": "value-engineering",
+          "n": "04",
+          "title": "Value engineering",
+          "claim": "A target set before the build, and how far short we still are.",
+          "proof": "The value contract is declared before the build: a baseline, a target, a binding recall floor and an accuracy floor. Distance from target is reported in standard errors computed from the measurement itself, so a gap that is within noise is not dressed up as progress. After the approved change the contract is still not met, and the console says by how much.",
+          "mode": "recorded",
+          "evidence": [
+            "aml/improve/contract.py",
+            "aml/improve/bands.py"
+          ],
+          "watch_for": "Sigma is arithmetic, not a label. A two-sigma gap is a gap; a half-sigma gap is a measurement you cannot act on yet."
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+# Real alert data: named individuals. Never commit.
+AntiMoneyLaundering/
+artifacts/corpus.json
+
+# Recorded runs and demo inputs rendered from real alerts. Regenerable locally.
+artifacts/run_baseline.json
+artifacts/run_attacks.json
+artifacts/demo/alert_1*.txt
+
+# Derived from the confidential Actimize Solution Guide (thresholds, logic).
+library/aml/rules.json
+
+# Third-party document; not ours to republish.
+Anthropic_AI_SDLC_Guide.pdf
+
+# Environments and caches
+.venv/
+node_modules/
+__pycache__/
+*.pyc
+
+# Write-only stream logs
+artifacts/live/*.events.jsonl

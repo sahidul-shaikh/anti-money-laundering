@@ -1,0 +1,5 @@
+{
+  "asset": "ungrantable-scopes",
+  "phase": "security_review",
+  "product": "aml-alert-investigator"
+}

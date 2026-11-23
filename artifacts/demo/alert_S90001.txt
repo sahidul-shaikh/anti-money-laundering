@@ -1,0 +1,27 @@
+# ALERT S90001 | scenario SAS10050
+# a large receipt that was retained - the agent over-escalates it
+# correct answer: close_no_further_action
+# paste everything below this line
+
+ALERT S90001 | scenario SAS10050 | Payments Made Using High-Risk Instruments
+Triggering values: Total High-Risk Instrument Deposits =   45,500
+Run date: 30-NOV-18
+
+PARTY
+  Name: ANA LUCIA FERREIRA   Type: INDIVIDUAL
+  Date of birth: 1979-07-30   Occupation: SELF EMPLOYED CLERICAL
+  Annual income: 59,700 USD
+  Residence: HIALEAH, FL, UNITED STATES
+
+ACCOUNT
+  Number: 02-0000090001   Product: CHECKING ACCT
+  Opened: 2010-05-15   Status: ACTIVE
+  Currency: US DOLLAR   Registration: INDIVIDUAL
+
+TRANSACTIONS (5)
+  date       ref            amount      dr/cr   medium            country
+  20181113   2000000000     45,500.00  CREDIT  CHECK             United States
+  20181114   2000000001      1,019.00  DEBIT   CHECK             United States
+  20181107   2000000002      1,385.00  DEBIT   CHECK             United States
+  20181120   2000000003      1,058.00  DEBIT   CHECK             United States
+  20181128   2000000004      1,634.00  DEBIT   CHECK             United States

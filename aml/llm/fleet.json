@@ -1,0 +1,63 @@
+{
+  "active_fleet": "bedrock",
+  "_prices": "USD per 1M tokens, from the AWS Price List API for us-east-1 on 2026-11-09.",
+  "_quality": "Escalation recall measured on 8 real alerts spanning all six scenarios. Provisional until the full corpus runs in Increment 1.",
+  "_serving": "A model with serving=false stays in the fleet so the cost miner can price it, but the router may never select it.",
+  "fleets": {
+    "bedrock": {
+      "rejected": {
+        "provider": "bedrock",
+        "model": "amazon.nova-lite-v1:0",
+        "price_in": 0.06,
+        "price_out": 0.24,
+        "quality": 0.375,
+        "quality_basis": "3/8 escalation recall, measured 2026-11-09",
+        "latency_ms": 2500,
+        "serving": false
+      },
+      "cheap": {
+        "provider": "bedrock",
+        "model": "us.meta.llama3-3-70b-instruct-v1:0",
+        "price_in": 0.72,
+        "price_out": 0.72,
+        "quality": 0.75,
+        "quality_basis": "6/8 escalation recall, measured 2026-11-09",
+        "latency_ms": 2400,
+        "serving": true
+      },
+      "premium": {
+        "provider": "bedrock",
+        "model": "mistral.mistral-large-3-675b-instruct",
+        "price_in": 0.50,
+        "price_out": 1.50,
+        "quality": 1.0,
+        "quality_basis": "8/8 escalation recall, measured 2026-11-09",
+        "latency_ms": 7900,
+        "serving": true
+      }
+    },
+    "bedrock_anthropic": {
+      "_note": "Unavailable on account 927937018437 until a payment instrument is attached to the AWS Marketplace subscription. Prices are first-party list rates and must be re-checked against Bedrock pricing before use.",
+      "cheap": {
+        "provider": "bedrock",
+        "model": "us.anthropic.claude-haiku-4-5-20251001-v1:0",
+        "price_in": 1.0,
+        "price_out": 5.0,
+        "quality": 0.0,
+        "quality_basis": "not yet measured - no account access",
+        "latency_ms": 1200,
+        "serving": true
+      },
+      "premium": {
+        "provider": "bedrock",
+        "model": "us.anthropic.claude-sonnet-4-6",
+        "price_in": 3.0,
+        "price_out": 15.0,
+        "quality": 0.0,
+        "quality_basis": "not yet measured - no account access",
+        "latency_ms": 3000,
+        "serving": true
+      }
+    }
+  }
+}

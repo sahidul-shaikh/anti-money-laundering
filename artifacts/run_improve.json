@@ -1,0 +1,371 @@
+{
+  "contract": {
+    "name": "AML Alert Investigator",
+    "baseline_gbp": 17.0,
+    "target_gbp": 12.0,
+    "target_recall": 0.9,
+    "target_accuracy": 0.85,
+    "telemetry": [
+      "SYSTEM",
+      "MODEL",
+      "AGENT",
+      "TRANSACTION",
+      "VALUE"
+    ],
+    "approver": "Head of Financial Crime Technology"
+  },
+  "detections": [
+    {
+      "metric": "accuracy",
+      "observed": 0.7429,
+      "target": 0.85,
+      "stderr": 0.05224,
+      "sigma": 2.05,
+      "band": 2,
+      "action": "material: proposals allowed, each one needs human approval",
+      "note": ""
+    },
+    {
+      "metric": "recall",
+      "observed": 0.8286,
+      "target": 0.9,
+      "stderr": 0.0637,
+      "sigma": 1.12,
+      "band": 2,
+      "action": "material: proposals allowed, each one needs human approval",
+      "note": ""
+    },
+    {
+      "metric": "cost_per_outcome_gbp",
+      "observed": 18.7672,
+      "target": 12.0,
+      "stderr": 3.2053,
+      "sigma": 2.11,
+      "band": 2,
+      "action": "material: proposals allowed, each one needs human approval",
+      "note": ""
+    }
+  ],
+  "clusters": [
+    {
+      "signature": "missed_escalation:unremarkable",
+      "kind": "missed_escalation",
+      "feature": "unremarkable",
+      "count": 3,
+      "alert_ids": [
+        "11364",
+        "11382",
+        "11383"
+      ],
+      "root_cause": "No attributed cause yet; needs an analyst.",
+      "proposal": "",
+      "cost_gbp": 306.0
+    },
+    {
+      "signature": "over_escalation:large_receipt_retained",
+      "kind": "over_escalation",
+      "feature": "large_receipt_retained",
+      "count": 5,
+      "alert_ids": [
+        "S90001",
+        "S90002",
+        "S90003",
+        "S90004",
+        "S90005"
+      ],
+      "root_cause": "The agent treats a large receipt as suspicion in itself. It does not check whether the money moved on, which is what distinguishes layering from a settlement that was simply banked.",
+      "proposal": "explain_before_escalate",
+      "cost_gbp": 85.01
+    },
+    {
+      "signature": "over_escalation:regular_equal_credits",
+      "kind": "over_escalation",
+      "feature": "regular_equal_credits",
+      "count": 4,
+      "alert_ids": [
+        "S90006",
+        "S90007",
+        "S90009",
+        "S90034"
+      ],
+      "root_cause": "Regular equal credits consistent with declared income are being read as a burst in beneficiary activity. The agent is not using the income on the party record as the explanation it is.",
+      "proposal": "explain_before_escalate",
+      "cost_gbp": 68.01
+    },
+    {
+      "signature": "over_escalation:regular_equal_debits",
+      "kind": "over_escalation",
+      "feature": "regular_equal_debits",
+      "count": 3,
+      "alert_ids": [
+        "S90010",
+        "S90011",
+        "S90013"
+      ],
+      "root_cause": "Equal recurring payments are read as structuring. AML-STR requires sub-threshold amounts and a 14-day window; a trading rhythm against visible receipts meets neither.",
+      "proposal": "explain_before_escalate",
+      "cost_gbp": 51.0
+    }
+  ],
+  "mining_summary": {
+    "clusters": 4,
+    "failures": 18,
+    "clustered": 15,
+    "attributed": 12,
+    "proposals": [
+      "explain_before_escalate"
+    ],
+    "cost_in_clusters_gbp": 510.02
+  },
+  "spend_clusters": [
+    {
+      "cluster_id": "TOK-01",
+      "name": "Fixed instruction prefix resent on every alert",
+      "share_of_spend": 0.4731,
+      "basis": "786 system tokens on each of 70 calls, 55,020 of 116,301 input tokens",
+      "lever": "cache the prefix; a cached read bills at 10% of the input rate",
+      "estimated_saving": "up to 43% of input spend",
+      "verdict": "available on models that support prompt caching; neither serving model in this fleet does, so it is costed and left open"
+    },
+    {
+      "cluster_id": "TOK-02",
+      "name": "One human review per alert rather than per party",
+      "share_of_spend": 0.0,
+      "basis": "70 alerts resolve to 60 parties, so 10 reviews are duplicates of one already being done",
+      "lever": "consolidate alerts by party before they reach the queue",
+      "estimated_saving": "10 reviews at GBP 17.00 = GBP 170 across the corpus",
+      "verdict": "the dominant cost is human time, not tokens"
+    },
+    {
+      "cluster_id": "TOK-03",
+      "name": "Every alert goes to the premium tier",
+      "share_of_spend": 1.0,
+      "basis": "premium $0.1300 against cheap $0.0730 on the same 70 alerts",
+      "lever": "route everything to the cheap tier",
+      "estimated_saving": "44% of model spend",
+      "verdict": "REFUSE: accuracy falls 14.3% (74.3% to 60.0%)"
+    },
+    {
+      "cluster_id": "TOK-04",
+      "name": "A cheaper model exists outside the serving fleet (amazon.nova-lite-v1:0)",
+      "share_of_spend": 0.0,
+      "basis": "$0.15 per MTok blended against premium, with 38% measured recall (3/8 escalation recall, measured 2026-11-09)",
+      "lever": "demote the fleet to the cheapest model available",
+      "estimated_saving": "roughly an order of magnitude on model spend",
+      "verdict": "REFUSE: 38% recall means it misses most suspicious activity; it is in the fleet only so it can be priced"
+    }
+  ],
+  "system_tokens": 786,
+  "proposals": [
+    {
+      "proposal_id": "ACC-01",
+      "kind": "accuracy",
+      "change": "explain_before_escalate",
+      "rationale": "The agent treats a large receipt as suspicion in itself. It does not check whether the money moved on, which is what distinguishes layering from a settlement that was simply banked. Regular equal credits consistent with declared income are being read as a burst in beneficiary activity. The agent is not using the income on the party record as the explanation it is.",
+      "evidence": "12 failures across 3 clusters (over_escalation:large_receipt_retained, over_escalation:regular_equal_credits, over_escalation:regular_equal_debits) costing GBP 204.02",
+      "expected": "recover some of the GBP 204.02 without losing recall"
+    },
+    {
+      "proposal_id": "CST-01",
+      "kind": "cost",
+      "change": "consolidate_by_party",
+      "rationale": "70 alerts resolve to 60 parties, so 10 reviews are duplicates of one already being done",
+      "evidence": "10 reviews at GBP 17.00 = GBP 170 across the corpus",
+      "expected": "lower cost per outcome with no loss of accuracy"
+    }
+  ],
+  "noise_floor": {
+    "proposal": {
+      "proposal_id": "NOISE",
+      "kind": "accuracy",
+      "change": "none",
+      "rationale": "",
+      "evidence": "",
+      "expected": ""
+    },
+    "before": {
+      "calls": 70,
+      "failed_calls": 0,
+      "outcomes": 70,
+      "tokens_in": 116301,
+      "tokens_out": 47902,
+      "cost_usd": 0.130003,
+      "model_mix": {
+        "premium": 70
+      },
+      "cost_by_tier": {
+        "premium": 0.130003
+      },
+      "accuracy": 0.7429,
+      "recall": 0.8286,
+      "specificity": 0.6571,
+      "groundedness": 0.9982,
+      "invented_citations": 2,
+      "cost_per_outcome_gbp": 18.7672
+    },
+    "after": {
+      "calls": 70,
+      "failed_calls": 0,
+      "outcomes": 70,
+      "tokens_in": 116301,
+      "tokens_out": 48863,
+      "cost_usd": 0.131445,
+      "model_mix": {
+        "premium": 70
+      },
+      "cost_by_tier": {
+        "premium": 0.131445
+      },
+      "accuracy": 0.7143,
+      "recall": 0.8,
+      "specificity": 0.6286,
+      "groundedness": 0.997,
+      "invented_citations": 2,
+      "cost_per_outcome_gbp": 20.2215
+    },
+    "deltas": {
+      "accuracy": -0.0286,
+      "recall": -0.0286,
+      "specificity": -0.0285,
+      "cost_per_outcome_gbp": 1.4543
+    },
+    "improved": 2,
+    "regressed": 4,
+    "p_value": 0.6875,
+    "evaluation_cost_usd": 0.0
+  },
+  "evaluations": [
+    {
+      "proposal": {
+        "proposal_id": "ACC-01",
+        "kind": "accuracy",
+        "change": "explain_before_escalate",
+        "rationale": "The agent treats a large receipt as suspicion in itself. It does not check whether the money moved on, which is what distinguishes layering from a settlement that was simply banked. Regular equal credits consistent with declared income are being read as a burst in beneficiary activity. The agent is not using the income on the party record as the explanation it is.",
+        "evidence": "12 failures across 3 clusters (over_escalation:large_receipt_retained, over_escalation:regular_equal_credits, over_escalation:regular_equal_debits) costing GBP 204.02",
+        "expected": "recover some of the GBP 204.02 without losing recall"
+      },
+      "before": {
+        "accuracy": 0.7095,
+        "recall": 0.8095,
+        "specificity": 0.6095,
+        "groundedness": 0.9964,
+        "cost_per_outcome_gbp": 19.9767,
+        "cost_usd": 0.1319,
+        "repeats": 3,
+        "unstable_alerts": 3
+      },
+      "after": {
+        "accuracy": 0.7,
+        "recall": 0.619,
+        "specificity": 0.781,
+        "groundedness": 0.9993,
+        "cost_per_outcome_gbp": 26.2272,
+        "cost_usd": 0.1348,
+        "repeats": 3,
+        "unstable_alerts": 10
+      },
+      "deltas": {
+        "accuracy": -0.0095,
+        "recall": -0.1905,
+        "specificity": 0.1715,
+        "cost_per_outcome_gbp": 6.2505
+      },
+      "improved": 7,
+      "regressed": 6,
+      "p_value": 1.0,
+      "evaluation_cost_usd": 0.40449
+    },
+    {
+      "proposal": {
+        "proposal_id": "CST-01",
+        "kind": "cost",
+        "change": "consolidate_by_party",
+        "rationale": "70 alerts resolve to 60 parties, so 10 reviews are duplicates of one already being done",
+        "evidence": "10 reviews at GBP 17.00 = GBP 170 across the corpus",
+        "expected": "lower cost per outcome with no loss of accuracy"
+      },
+      "before": {
+        "accuracy": 0.7095,
+        "recall": 0.8095,
+        "specificity": 0.6095,
+        "groundedness": 0.9964,
+        "cost_per_outcome_gbp": 19.9767,
+        "cost_usd": 0.1319,
+        "repeats": 3,
+        "unstable_alerts": 3
+      },
+      "after": {
+        "accuracy": 0.7428,
+        "recall": 0.8571,
+        "specificity": 0.6286,
+        "groundedness": 0.9988,
+        "cost_per_outcome_gbp": 14.9596,
+        "cost_usd": 0.1351,
+        "repeats": 3,
+        "unstable_alerts": 4
+      },
+      "deltas": {
+        "accuracy": 0.0333,
+        "recall": 0.0476,
+        "specificity": 0.0191,
+        "cost_per_outcome_gbp": -5.0171
+      },
+      "improved": 4,
+      "regressed": 2,
+      "p_value": 0.6875,
+      "evaluation_cost_usd": 0.40527
+    }
+  ],
+  "decisions": [
+    {
+      "proposal_id": "ACC-01",
+      "outcome": "insufficient_evidence",
+      "approved": false,
+      "reason": "cannot be told apart from noise at this sample size: 7 improved, 6 regressed, p=1.000",
+      "approver": ""
+    },
+    {
+      "proposal_id": "CST-01",
+      "outcome": "approved",
+      "approved": true,
+      "reason": "saves GBP 5.02 per outcome, quality intact: 4 improved, 2 regressed, p=0.688",
+      "approver": "Head of Financial Crime Technology"
+    }
+  ],
+  "approved_changes": [
+    "consolidate_by_party"
+  ],
+  "before": {
+    "accuracy": 0.7095,
+    "recall": 0.8095,
+    "specificity": 0.6095,
+    "groundedness": 0.9964,
+    "cost_per_outcome_gbp": 19.9767,
+    "cost_usd": 0.1319,
+    "repeats": 3,
+    "unstable_alerts": 3
+  },
+  "after": {
+    "accuracy": 0.7476,
+    "recall": 0.8381,
+    "specificity": 0.6571,
+    "groundedness": 0.9994,
+    "cost_per_outcome_gbp": 15.1244,
+    "cost_usd": 0.1351,
+    "repeats": 3,
+    "unstable_alerts": 3
+  },
+  "realisation": {
+    "cost_per_outcome_gbp": 15.1244,
+    "cost_target_gbp": 12.0,
+    "cost_target_met": false,
+    "cost_gap_closed": 0.3751,
+    "recall": 0.8381,
+    "recall_target": 0.9,
+    "recall_target_met": false,
+    "accuracy": 0.7476,
+    "accuracy_target": 0.85,
+    "accuracy_target_met": false,
+    "all_targets_met": false
+  }
+}

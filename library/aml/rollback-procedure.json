@@ -1,0 +1,5 @@
+{
+  "asset": "rollback-procedure",
+  "phase": "deployment",
+  "product": "aml-alert-investigator"
+}

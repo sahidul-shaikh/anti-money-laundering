@@ -1,0 +1,67 @@
+{
+  "product": "aml-alert-investigator",
+  "phases_total": 12,
+  "phases_passed": 2,
+  "gates": [
+    "contract",
+    "spec"
+  ],
+  "cost_usd": 0.27858,
+  "duration_ms": 126591,
+  "library": {
+    "created": 0,
+    "inherited": 3,
+    "total": 3,
+    "reuse_rate": 1.0,
+    "created_names": [],
+    "inherited_names": [
+      "acceptance-criteria-pattern",
+      "aml-threat-library",
+      "value-contract-template"
+    ],
+    "on_disk": 18
+  },
+  "results": [
+    {
+      "phase_id": "contract",
+      "name": "Value contract",
+      "artifact": "builds\\aml-alert-investigator\\contract.md",
+      "evaluation": {
+        "phase_id": "contract",
+        "passed": true,
+        "missing": [],
+        "length": 6867,
+        "reason": "all 4 sections and 0 identifiers present"
+      },
+      "cost_usd": 0.16324,
+      "duration_ms": 37748,
+      "gated": true,
+      "approved_by": "Head of Financial Crime Technology",
+      "assets_created": [],
+      "assets_inherited": [
+        "value-contract-template"
+      ]
+    },
+    {
+      "phase_id": "spec",
+      "name": "Specification and threat model",
+      "artifact": "builds\\aml-alert-investigator\\spec.md",
+      "evaluation": {
+        "phase_id": "spec",
+        "passed": true,
+        "missing": [],
+        "length": 19544,
+        "reason": "all 2 sections and 2 identifiers present"
+      },
+      "cost_usd": 0.11535,
+      "duration_ms": 88843,
+      "gated": true,
+      "approved_by": "Head of Financial Crime Technology",
+      "assets_created": [],
+      "assets_inherited": [
+        "acceptance-criteria-pattern",
+        "aml-threat-library"
+      ]
+    }
+  ]
+}
