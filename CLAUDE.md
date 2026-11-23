@@ -11,6 +11,8 @@ insufficient-information, with evidence.
 
 ```bash
 uv sync                                       # once
+git config core.hooksPath .githooks           # once per clone: pre-push refuses real customer data
+AML_SYNTHETIC_ONLY=1 uv run python checks/aml_check_00_foundation.py   # how CI runs: synthetic data only
 uv run python scripts/serve_factory.py        # console on http://localhost:8765
 for f in checks/aml_check_0*.py; do uv run python "$f"; done   # all five must print ALL CHECKS PASS
 uv run --no-project --with playwright python <script>          # Playwright is NOT a project dep
