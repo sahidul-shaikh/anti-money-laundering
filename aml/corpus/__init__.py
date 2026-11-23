@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from aml.core.mode import SYNTHETIC_ONLY
 from aml.corpus.loader import load_real_alerts
 from aml.corpus.model import (
     CLOSE,
@@ -28,8 +29,11 @@ def build_corpus(refresh: bool = False) -> list[Alert]:
     Reads the cached snapshot when there is one. The source workbook is an
     Excel file that anything on the machine can hold a lock on, and a demo
     that dies because a spreadsheet is open is not a demo. Pass refresh=True
-    to rebuild from the workbook.
+    to rebuild from the workbook. In synthetic-only mode the workbook and
+    the cache are never touched.
     """
+    if SYNTHETIC_ONLY:
+        return build_negatives()
     cache = ARTIFACTS / "corpus.json"
     if not refresh and cache.exists():
         return read_corpus(cache)
