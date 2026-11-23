@@ -1,0 +1,42 @@
+# Runs on every pull request into main, on synthetic data only.
+# The real alert extract never leaves the developer machine; see aml/core/mode.py.
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  AML_SYNTHETIC_ONLY: "1"
+  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+
+jobs:
+  checks:
+    name: pillar checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --locked
+      - name: foundation (corpus, fleet, live Bedrock)
+        run: uv run python checks/aml_check_00_foundation.py
+      - name: run (routing, verdicts, telemetry)
+        run: uv run python checks/aml_check_01_run.py
+      - name: improve (contract, bands, mining, gate)
+        run: uv run python checks/aml_check_03_improve.py
+      - name: build (factory, evaluator, tamper demos)
+        run: uv run python checks/aml_check_04_build.py
+      - name: acceptance suite (the oracle, 20 tests)
+        run: uv run --with pytest python -m pytest checks/acceptance -q
+
+  attack-suite:
+    name: attack suite
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --locked
+      - name: envelope, scopes, redaction, live injection probes
+        run: uv run python checks/aml_check_02_secure.py
