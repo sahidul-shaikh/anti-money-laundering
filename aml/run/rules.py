@@ -22,7 +22,14 @@ from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 
-CATALOGUE = Path(__file__).resolve().parents[2] / "library" / "aml" / "rules.json"
+from aml.core.mode import SYNTHETIC_ONLY
+
+ROOT = Path(__file__).resolve().parents[2]
+CATALOGUE = (
+    ROOT / "tests" / "fixtures" / "rules.json"
+    if SYNTHETIC_ONLY
+    else ROOT / "library" / "aml" / "rules.json"
+)
 
 
 @dataclass(frozen=True)

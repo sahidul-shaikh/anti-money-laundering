@@ -1,0 +1,82 @@
+{
+  "source": "Synthetic rule fixture for CI (not the vendor Solution Guide)",
+  "pages_in_source": 0,
+  "models": {
+    "AML-STR": {
+      "title": "Structuring Activity",
+      "pages": [0, 0],
+      "rules": [
+        {
+          "rule_id": "SYN-STR-01",
+          "rule_name": "Synthetic structuring rule",
+          "rule_objective": "Detect repeated transactions just below a reporting bound.",
+          "evaluation_level": "Account",
+          "evaluation_trigger": "Daily Activity",
+          "detection_logic": "Transaction value between LOWER BOUND and UPPER BOUND",
+          "recurrence": "Recurrence >= OCCURRENCES over D Days",
+          "default_values": "LOWER BOUND: 1,000 UPPER BOUND: 1,999 OCCURRENCES: 2 D: 7 (synthetic)",
+          "page": 0
+        }
+      ]
+    },
+    "AML-ECT": {
+      "title": "Excessive Cash/Cash-Equivalent Transactions",
+      "pages": [0, 0],
+      "rules": [
+        {
+          "rule_id": "SYN-ECT-01",
+          "rule_name": "Synthetic cash-equivalent rule",
+          "rule_objective": "Detect high-risk instruments above a total.",
+          "evaluation_level": "Account",
+          "evaluation_trigger": "Daily Activity",
+          "detection_logic": "SUM (high-risk instrument transactions) over N Days > THRESHOLD",
+          "recurrence": "",
+          "default_values": "THRESHOLD: 5,000 N: 7 (synthetic)",
+          "page": 0
+        }
+      ]
+    },
+    "AML-EBB": {
+      "title": "Burst in Beneficiary Activity",
+      "pages": [0, 0],
+      "rules": [
+        {
+          "rule_id": "SYN-EBB-01",
+          "rule_name": "Synthetic beneficiary burst rule",
+          "rule_objective": "Detect many remitters paying one beneficiary.",
+          "evaluation_level": "Party",
+          "evaluation_trigger": "Daily Activity",
+          "detection_logic": "COUNT (distinct remitters) over N Days >= REMITTERS",
+          "recurrence": "",
+          "default_values": "REMITTERS: 3 N: 7 (synthetic)",
+          "page": 0
+        }
+      ]
+    },
+    "AML-MLT": {
+      "title": "Customer Identity Discovery",
+      "pages": [0, 0],
+      "rules": [
+        {
+          "rule_id": "SYN-MLT-01",
+          "rule_name": "Synthetic shared identifier rule",
+          "rule_objective": "Detect one identifier shared across unrelated parties.",
+          "evaluation_level": "Party",
+          "evaluation_trigger": "Daily Activity",
+          "detection_logic": "COUNT (parties sharing identifier) >= PARTIES",
+          "recurrence": "",
+          "default_values": "PARTIES: 2 (synthetic)",
+          "page": 0
+        }
+      ]
+    }
+  },
+  "scenarios": {
+    "SAS10014": {"description": "Structured Withdrawals", "model": "AML-STR", "rule_id": "SYN-STR-01"},
+    "SAS10056": {"description": "Structured Premiums", "model": "AML-STR", "rule_id": "SYN-STR-01"},
+    "SAS10016": {"description": "Structured Deposits Across Locations", "model": "AML-STR", "rule_id": "SYN-STR-01"},
+    "SAS10050": {"description": "Payments Using High-Risk Instruments", "model": "AML-ECT", "rule_id": null},
+    "SAS10602": {"description": "Multiple External Remitters, One Internal Beneficiary", "model": "AML-EBB", "rule_id": null},
+    "SAS10012": {"description": "Recurring Phone Number", "model": "AML-MLT", "rule_id": null}
+  }
+}
