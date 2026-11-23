@@ -66,9 +66,9 @@ CASES = [
     ),
     Case(
         "S80007", "SAS10012", "Recurring Phone Number",
-        ("IRINA VOLKOVA", "1982-04-17", "CONSULTANT", 45000, "SPARKS", "NV"), False,
-        "Phone number shared by six unrelated parties in four states, each moving "
-        "similar round sums to the same overseas beneficiary.",
+        ("DESMOND KELLAWAY", "1993-07-09", "SELF EMPLOYED", 24000, "YONKERS", "NY"), False,
+        "Same party as S80006. Phone number shared by six unrelated parties in four "
+        "states, each moving similar round sums to the same overseas beneficiary.",
     ),
 ]
 
@@ -104,9 +104,11 @@ def _transactions(alert_id: str) -> tuple[list[Transaction], str]:
 def build_escalations() -> list[Alert]:
     """The synthetic escalatable alerts, fixed and deterministic."""
     alerts = []
+    party_numbers: dict[str, str] = {}
     for n, case in enumerate(CASES, start=1):
         name, dob, occupation, income, city, state = case.party
         is_org = name.endswith("LLC")
+        party_number = party_numbers.setdefault(name, f"28000{n}")
         transactions, triggered = _transactions(case.alert_id)
         alerts.append(
             Alert(
@@ -116,7 +118,7 @@ def build_escalations() -> list[Alert]:
                 triggered=triggered,
                 run_date="30-NOV-18",
                 party=Party(
-                    number=f"28000{n}", name=name,
+                    number=party_number, name=name,
                     type="ORGANIZATION" if is_org else "INDIVIDUAL",
                     dob=dob, occupation=occupation, annual_income=float(income),
                     city=city, state=state, country="UNITED STATES",
