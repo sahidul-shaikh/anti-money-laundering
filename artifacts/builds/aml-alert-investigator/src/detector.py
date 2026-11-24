@@ -1,26 +1,48 @@
-"""Structuring detector for Actimize AML-STR rule AML-STR-CCE-INN-A-D01-DST.
+"""Actimize AML-STR-CCE-INN-A-D01-DST structuring detector.
 
-A transaction qualifies when it is a CREDIT and its amount lies in
-[lower_bound, upper_bound], both bounds inclusive. The rule fires on the first
-window of window_days calendar days (both endpoints inclusive) that holds at
-least `occurrences` qualifying transactions. Windows start at each qualifying
-transaction in date order.
+Rule, applied in this order:
+1. Direction: only CREDIT transactions are considered.
+2. Amount: lower_bound <= amount <= upper_bound, both bounds inclusive.
+3. Window: a window of window_days spans window_days calendar days inclusive.
+   A window anchored on date d holds qualifying transactions dated d through
+   d + window_days - 1.
+4. Fires when the best window holds at least `occurrences` qualifying transactions.
 
-Input dates are YYYYMMDD. window_start and window_end are YYYY-MM-DD.
-
-When the rule does not fire, occurrences is the largest number of qualifying
-transactions in any single window (0 if none qualify) and the window fields are
-None.
+Input dates are YYYYMMDD. The window_start and window_end result values are
+ISO-8601 (YYYY-MM-DD) dates of the first and last qualifying transactions in the
+window. Result keys are always present. `occurrences` is the largest qualifying
+count found in any window, whether or not the rule fires. When the rule does not
+fire, window_start and window_end are None, refs is empty and total is 0.0.
 """
 
 from datetime import date, datetime, timedelta
-from typing import NamedTuple
 
 
-class _Txn(NamedTuple):
-    day: date
-    ref: str
-    amount: float
+def _parse_date(value: str) -> date:
+    """Parse a YYYYMMDD string into a date."""
+    return datetime.strptime(value, "%Y%m%d").date()
+
+
+def _qualifying(transactions: list[dict], lower_bound: float, upper_bound: float) -> list[tuple]:
+    """Return (date, transaction) pairs that pass the direction and amount filters, sorted by date."""
+    picked = [
+        (_parse_date(t["date"]), t)
+        for t in transactions
+        if str(t["direction"]).strip().upper() == "CREDIT"
+        and lower_bound <= float(t["amount"]) <= upper_bound
+    ]
+    return sorted(picked, key=lambda pair: pair[0])
+
+
+def _best_window(items: list[tuple], window_days: int) -> list[tuple]:
+    """Return the window with the most qualifying items; the earliest wins a tie."""
+    best: list[tuple] = []
+    for start, _ in items:
+        last = start + timedelta(days=window_days - 1)
+        window = [pair for pair in items if start <= pair[0] <= last]
+        if len(window) > len(best):
+            best = window
+    return best
 
 
 def detect_structuring(
@@ -30,53 +52,28 @@ def detect_structuring(
     occurrences: int = 3,
     window_days: int = 14,
 ) -> dict:
-    """Return the structuring detection result for one alert's transactions.
+    """Detect structured credits: at least `occurrences` amounts in [lower_bound, upper_bound] within `window_days`.
 
-    Keys: detected, occurrences, window_start, window_end, refs, total.
+    Each transaction needs date (YYYYMMDD), ref, amount and direction (CREDIT or DEBIT).
+    window_start and window_end are returned as ISO-8601 dates (YYYY-MM-DD).
     """
-    qualifying = _qualifying(transactions, lower_bound, upper_bound)
-    windows = [_window(qualifying, i, window_days) for i in range(len(qualifying))]
-    for window in windows:
-        if len(window) >= occurrences:
-            return _detected(window)
-    return _not_detected(max((len(w) for w in windows), default=0))
-
-
-def _qualifying(transactions: list[dict], lower: float, upper: float) -> list[_Txn]:
-    """Credits with amount in [lower, upper], in date order (stable for equal dates)."""
-    txns = [
-        _Txn(datetime.strptime(t["date"], "%Y%m%d").date(), t["ref"], t["amount"])
-        for t in transactions
-        if t["direction"] == "CREDIT" and lower <= t["amount"] <= upper
-    ]
-    return sorted(txns, key=lambda t: t.day)
-
-
-def _window(qualifying: list[_Txn], start_index: int, window_days: int) -> list[_Txn]:
-    """Qualifying transactions from start_index whose date falls within window_days of its first day, inclusive."""
-    last_day = qualifying[start_index].day + timedelta(days=window_days - 1)
-    return [t for t in qualifying[start_index:] if t.day <= last_day]
-
-
-def _detected(window: list[_Txn]) -> dict:
-    """Result for a window that reached the occurrence threshold."""
+    window = _best_window(_qualifying(transactions, lower_bound, upper_bound), window_days)
+    detected = len(window) > 0 and len(window) >= occurrences
+    if not detected:
+        return {
+            "detected": False,
+            "occurrences": len(window),
+            "window_start": None,
+            "window_end": None,
+            "refs": [],
+            "total": 0.0,
+        }
+    txns = [pair[1] for pair in window]
     return {
         "detected": True,
-        "occurrences": len(window),
-        "window_start": window[0].day.isoformat(),
-        "window_end": window[-1].day.isoformat(),
-        "refs": [t.ref for t in window],
-        "total": round(float(sum(t.amount for t in window)), 2),
-    }
-
-
-def _not_detected(peak: int) -> dict:
-    """Result when no window reached the occurrence threshold; peak is the largest window count."""
-    return {
-        "detected": False,
-        "occurrences": peak,
-        "window_start": None,
-        "window_end": None,
-        "refs": [],
-        "total": 0.0,
+        "occurrences": len(txns),
+        "window_start": window[0][0].isoformat(),
+        "window_end": window[-1][0].isoformat(),
+        "refs": [t["ref"] for t in txns],
+        "total": round(sum(float(t["amount"]) for t in txns), 2),
     }
