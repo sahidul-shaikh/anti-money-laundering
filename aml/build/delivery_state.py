@@ -112,9 +112,29 @@ def loop_station(commits: list[dict], live: dict | None, recorded: set[str]) -> 
     return station("pending", "Build loop")
 
 
+def commit_and_pr(code: list[dict], pr: dict | None, delivering: dict | None) -> list[dict]:
+    """The Commit and Pull request stations, including a delivery under way."""
+    if pr or not delivering:
+        return [
+            station("done", "Commit", f"{code[-1]['oid'][:7]} by {code[-1]['author']}")
+            if code else station("pending", "Commit"),
+            station("done", "Pull request", f"#{pr['number']} by {pr['author']['login']}",
+                    pr["url"], pr["createdAt"]) if pr else station("pending", "Pull request"),
+        ]
+    step, since = delivering["step"], delivering["started_at"]
+    if step == "commit":
+        return [station("running", "Commit", "committing, scanning for real data, pushing", "", since),
+                station("pending", "Pull request")]
+    if step == "pr":
+        return [station("done", "Commit", f"{delivering['commit'][:7]} by aml-factory-bot"),
+                station("running", "Pull request", "opening the pull request", "", since)]
+    return [station("failed", "Commit", "delivery refused: " + delivering["error"]),
+            station("pending", "Pull request")]
+
+
 def chain(task: dict, prs: list[dict], live: dict | None = None,
           recorded: set[str] = frozenset(), cycle_start: str = "",
-          fresh: dict | None = None) -> list[dict]:
+          fresh: dict | None = None, delivering: dict | None = None) -> list[dict]:
     """The eight stations for one task. `prs` are the task's PRs, oldest first;
     `recorded` is the run IDs that have a run record on disk.
 
@@ -122,6 +142,8 @@ def chain(task: dict, prs: list[dict], live: dict | None = None,
     current one began - a live run, or a run newer than the task's last PR -
     and PRs from earlier cycles are not shown as this cycle's progress.
     `fresh` is that newer run's record summary, while it is not yet delivered.
+    `delivering` is a delivery in progress or refused for this cycle: its step
+    ("commit", "pr" or "refused"), when it started, the commit, the error.
     """
     if cycle_start:
         prs = [p for p in prs if p["createdAt"] >= cycle_start]
@@ -141,10 +163,7 @@ def chain(task: dict, prs: list[dict], live: dict | None = None,
         station("done" if task["plan_status"].startswith("accepted") else
                 "waiting" if task["plan_status"] else "pending", "Plan", task["plan_status"]),
         loop,
-        station("done", "Commit", f"{code[-1]['oid'][:7]} by {code[-1]['author']}")
-        if code else station("pending", "Commit"),
-        station("done", "Pull request", f"#{pr['number']} by {pr['author']['login']}", pr["url"],
-                pr["createdAt"]) if pr else station("pending", "Pull request"),
+        *commit_and_pr(code, pr, delivering),
         ci,
         approval,
         merged_station(pr, approval),
@@ -240,11 +259,12 @@ def cycle(prs: list[dict], live: dict | None, run: dict | None) -> tuple[str, di
     return "", None
 
 
-def snapshot(live: dict | None = None, focus: str | None = None) -> dict:
+def snapshot(live: dict | None = None, focus: str | None = None,
+             delivering: dict | None = None) -> dict:
     """Every task's chain, the focus task, and PRs that belong to no task.
 
-    `focus` is the task the presenter chose; the live run and any undelivered
-    run are shown against it, and against no other task.
+    `focus` is the task the presenter chose; the live run, any undelivered
+    run and a delivery under way are shown against it, and no other task.
     """
     tasks = read_tasks()
     prs = read_prs()
@@ -263,7 +283,8 @@ def snapshot(live: dict | None = None, focus: str | None = None) -> dict:
     def task_chain(t: dict) -> list[dict]:
         if t["id"] != focus or not takes_runs:
             return chain(t, by_task.get(t["id"], []), recorded=recorded)
-        return chain(t, by_task.get(t["id"], []), live, recorded, start, fresh)
+        mine = delivering if delivering and delivering.get("task") == focus else None
+        return chain(t, by_task.get(t["id"], []), live, recorded, start, fresh, mine)
 
     return {
         "focus": focus,

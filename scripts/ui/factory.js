@@ -75,7 +75,7 @@ window.Factory = (function () {
 
   function renderNav() {
     el("pillar-nav").innerHTML = state.pillars.map((p) =>
-      `<button class="pnav ${p.id === state.pillar.id ? "on" : ""}"
+      `<button class="pnav ${p.id === state.pillar.id && !state.home ? "on" : ""}"
         data-pillar="${p.id}" ${p.status === "next" ? "disabled" : ""}
         title="${p.status === "next" ? "not built yet" : p.promise}">${p.title}</button>`
     ).join("");
@@ -93,6 +93,41 @@ window.Factory = (function () {
       ).join("");
     el("strip").querySelectorAll("[data-d]").forEach((b) =>
       b.addEventListener("click", () => go(state.pillar.id, b.dataset.d)));
+  }
+
+  /* ---- home: every pillar on one screen ------------------------------- */
+
+  // Tile order follows the wireframe: builds, improves / secures, runs.
+  const HOME_ORDER = ["builds", "improves", "secures", "runs"];
+
+  function renderHome() {
+    const tiles = HOME_ORDER.map((id) => state.pillars.find((p) => p.id === id)).filter(Boolean);
+    el("home").innerHTML = `
+      <div class="home-left">
+        <div class="eyebrow">AI for enterprise AI &nbsp;&middot;&nbsp; AML investigation use case</div>
+        <h1 class="home-title">AI-for-AI closes the gap between innovation and outcomes</h1>
+        <p class="promise">Apply AI across the entire AI lifecycle to industrialize the build,
+          run, security and continuous improvement of AI systems at scale.</p>
+        <div class="hero-actions">
+          <button class="btn primary" data-go="builds">Start with AI builds AI &rarr;</button>
+          <button class="btn" data-go="builds/delivery">Watch the factory deliver &rsaquo;</button>
+        </div>
+        <div class="card home-feature">
+          <div class="eyebrow">Featured use case &nbsp;&middot;&nbsp; FinCrime AML investigation</div>
+          <p>One alert, one traceable chain: financial activity &rarr; investigation &rarr;
+            evidence-backed decision &rarr; evaluated AI improvement &rarr; approved release.</p>
+        </div>
+      </div>
+      <div class="home-grid">
+        ${tiles.map((p, i) => `<button class="home-tile ${i === 0 ? "lead" : ""}"
+            data-go="${p.id}" ${p.status === "next" ? "disabled" : ""}>
+          <span class="t">${esc(p.title)}</span>
+          <span class="d">${p.disciplines.map((d) => esc(d.title)).join(" &middot; ")}</span>
+        </button>`).join("")}
+        <div class="home-hub">AI<br>ENGINEERING<br>FACTORY</div>
+      </div>`;
+    el("home").querySelectorAll("[data-go]").forEach((b) =>
+      b.addEventListener("click", () => { location.hash = "#/" + b.dataset.go; }));
   }
 
   function renderHero() {
@@ -188,10 +223,19 @@ window.Factory = (function () {
 
   function route() {
     const parts = (location.hash || "").replace(/^#\/?/, "").split("/").filter(Boolean);
-    const pillar = state.pillars.find((p) => p.id === parts[0]) || state.pillars[0];
+    const found = state.pillars.find((p) => p.id === parts[0]);
+    // No pillar in the address: the home screen, with every pillar on it.
+    state.home = !found;
+    document.body.classList.toggle("at-home", state.home);
+    const pillar = found || state.pillars[0];
     state.pillar = pillar;
     state.discipline = pillar.disciplines.some((d) => d.id === parts[1]) ? parts[1] : null;
     renderNav();
+    if (state.home) {
+      renderHome();
+      window.scrollTo({ top: 0 });
+      return;
+    }
     renderStrip();
     renderHero();
     renderGrid();
@@ -213,6 +257,7 @@ window.Factory = (function () {
     el("conn-dot").className = "dot" + (state.connected ? " live" : "");
     el("conn-text").textContent = state.connected ? "live" : "replay only";
     window.addEventListener("hashchange", route);
+    el("brand").addEventListener("click", () => { location.hash = "#/"; });
     route();
   }
 

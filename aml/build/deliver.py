@@ -16,6 +16,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -142,11 +143,17 @@ def _pr_body(run: dict, task: str) -> str:
     )
 
 
-def deliver(task: str, phase: str = "development") -> Delivery:
-    """Commit, push and open a PR for the latest passing run of a phase."""
+def deliver(task: str, phase: str = "development",
+            on_step: Callable[..., None] = lambda step, **detail: None) -> Delivery:
+    """Commit, push and open a PR for the latest passing run of a phase.
+
+    `on_step` is told as the work moves on - "commit" (committing, scanning,
+    pushing) then "pr" (opening the pull request) - so a console can show it.
+    """
     check_task(task)
     run = load_run(phase)
     check_deliverable(run)
+    on_step("commit", run_id=run["run_id"])
     secret = bot.verified_token()
     branch = f"factory/{task.lower()}-{run['run_id']}"
     # A run is delivered once, under one task; its branch is the record of that.
@@ -183,6 +190,7 @@ def deliver(task: str, phase: str = "development") -> Delivery:
             subprocess.run(["git", *args], cwd=ROOT, capture_output=True)
         shutil.rmtree(workdir, ignore_errors=True)
 
+    on_step("pr", commit=commit)
     pr_url = subprocess.run(
         ["gh", "pr", "create", "--repo", REPO, "--base", "main", "--head", branch,
          "--title", title, "--body", _pr_body(run, task)],

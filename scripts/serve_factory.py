@@ -114,6 +114,41 @@ class Run:
 RUNS: dict[str, Run] = {}
 RUN_LOCK = threading.Lock()
 
+# The delivery under way, or the last one refused: task, run_id, step, commit,
+# error, started_at. Read by the rail; cleared when a delivery succeeds or a
+# new implementation run starts.
+DELIVERY: dict = {}
+DELIVERY_FAILURES = (NotDeliverable, NotTheBot, GitFailed, subprocess.CalledProcessError)
+
+
+def auto_task() -> str | None:
+    """The task a passing run is delivered to without asking: the only one that accepts them."""
+    takers = [t["id"] for t in delivery_state.read_tasks()
+              if t["deliverable"] and t["intent_status"] == "accepted"]
+    return takers[0] if len(takers) == 1 else None
+
+
+def deliver_tracked(task: str):
+    """Deliver, recording each step as it happens so the rail can show it."""
+    DELIVERY.clear()
+    DELIVERY.update(task=task, step="commit", commit="", error="",
+                    started_at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()))
+    try:
+        done = deliver_run(task, on_step=lambda step, **detail: DELIVERY.update(step=step, **detail))
+    except DELIVERY_FAILURES as exc:
+        reason = str(exc) if not isinstance(exc, subprocess.CalledProcessError) \
+            else "opening the pull request failed"
+        DELIVERY.update(step="refused", error=reason)
+        raise
+    DELIVERY.clear()
+    delivery_state._cache["at"] = 0.0
+    return done
+
+
+def passed(run: Run) -> bool:
+    done = next((e for e in run.events if e["kind"] == "done"), None)
+    return bool(done and done.get("data", {}).get("loop", {}).get("passed"))
+
 ROUTE_RUNS: dict[str, Run] = {}
 PROBE_RUNS: dict[str, Run] = {}
 IMPROVE_RUNS: dict[str, Run] = {}
@@ -178,6 +213,8 @@ def start_run(
     run = Run(phase_id=phase_id, run_id=run_id)
     with RUN_LOCK:
         RUNS[phase_id] = run
+    if phase.kind == "code":
+        DELIVERY.clear()
 
     if focus:
         open_in_editor(artifact)
@@ -206,6 +243,14 @@ def start_run(
         finally:
             run.close()
             save_run_summary(run, model=model, withheld=withhold_rules)
+        # A passing implementation run goes straight to a pull request: the
+        # factory acts up to the merge gate on its own, and stops there.
+        task = auto_task() if phase.kind == "code" and passed(run) else None
+        if task:
+            try:
+                deliver_tracked(task)
+            except DELIVERY_FAILURES:
+                pass  # recorded in DELIVERY and shown on the rail as refused
 
     threading.Thread(target=worker, daemon=True).start()
     return run
@@ -815,7 +860,7 @@ class Handler(BaseHTTPRequestHandler):
 
         if route == "/api/delivery":
             focus = parse_qs(urlparse(self.path).query).get("focus", [None])[0]
-            self._json(delivery_state.snapshot(live_build(), focus))
+            self._json(delivery_state.snapshot(live_build(), focus, dict(DELIVERY) or None))
             return
 
         if route == "/api/state":
@@ -1062,11 +1107,10 @@ class Handler(BaseHTTPRequestHandler):
         if route == "/api/deliver":
             # The factory acts up to the merge gate: commit, push, open a PR.
             try:
-                done = deliver_run(str(payload.get("task", "")))
-            except (NotDeliverable, NotTheBot, GitFailed) as exc:
-                self._json({"error": str(exc)}, 409)
+                done = deliver_tracked(str(payload.get("task", "")))
+            except DELIVERY_FAILURES:
+                self._json({"error": DELIVERY["error"]}, 409)
                 return
-            delivery_state._cache["at"] = 0.0
             self._json({"branch": done.branch, "commit": done.commit, "pr_url": done.pr_url})
             return
 
@@ -1082,7 +1126,8 @@ class Handler(BaseHTTPRequestHandler):
             start_run(phase_id, focus=bool(payload.get("focus", True)),
                       model=str(payload.get("model") or "sonnet"),
                       withhold_rules=bool(payload.get("withhold_rules")))
-            self._json({"started": phase_id})
+            self._json({"started": phase_id,
+                        "deliver_to": auto_task() if BY_ID[phase_id].kind == "code" else None})
             return
 
         if route == "/api/extract":
