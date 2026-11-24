@@ -1,51 +1,67 @@
-"""Actimize AML-STR structuring rule: deposit structuring across a window.
+"""Actimize AML-STR structuring rule AML-STR-CCE-INN-A-D01-DST.
 
-A credit qualifies when its amount lies in [lower_bound, upper_bound], both
-inclusive. Debits are ignored. The rule fires when at least `occurrences`
-qualifying credits fall in one window of `window_days` calendar days, where
-the window includes both endpoints (d and d + window_days - 1 share a window,
-d + window_days does not). Input dates are YYYYMMDD; window dates are returned
-as ISO-8601 YYYY-MM-DD.
+Fires when at least `occurrences` CREDIT transactions, each with an amount in
+[lower_bound, upper_bound] (both inclusive), fall inside one window of
+`window_days` calendar days (both endpoints inclusive). DEBIT transactions are
+ignored. A transaction dated d and one dated d + (window_days - 1) share a
+window; d + window_days does not.
 
-The reported window is the one holding the most qualifying credits, earliest
-on a tie. When the rule does not fire, that window's count is still reported
-in `occurrences`.
+Result keys:
+    detected      True when the rule fires.
+    occurrences   Qualifying transactions in the firing window. When the rule
+                  does not fire, the largest qualifying count in any window.
+    window_start  YYYY-MM-DD of the earliest qualifying item in the firing
+                  window, or None.
+    window_end    YYYY-MM-DD of the latest qualifying item in the firing
+                  window, or None.
+    refs          Refs of the qualifying transactions in the firing window,
+                  in date order (input order breaks ties), or [].
+    total         Sum of the amounts in refs, rounded to 2 dp, or 0.0.
 """
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
+
+Hit = tuple[date, str, float]
 
 
-def _parse_date(value: str) -> date:
-    """Parse a YYYYMMDD string into a date."""
-    return datetime.strptime(value, "%Y%m%d").date()
+def _qualifying(transactions: list[dict], lower_bound: float, upper_bound: float) -> list[Hit]:
+    """Credits within the bounds, sorted by date. The sort is stable."""
+    hits = [
+        (datetime.strptime(t["date"], "%Y%m%d").date(), t["ref"], t["amount"])
+        for t in transactions
+        if t["direction"] == "CREDIT" and lower_bound <= t["amount"] <= upper_bound
+    ]
+    return sorted(hits, key=lambda hit: hit[0])
 
 
-def _qualifying_credits(
-    transactions: list[dict], lower_bound: float, upper_bound: float
-) -> list[tuple[date, str, float]]:
-    """Return (date, ref, amount) for in-band credits, sorted by date then ref."""
-    rows = []
-    for txn in transactions:
-        amount = float(txn["amount"])
-        if txn["direction"] == "CREDIT" and lower_bound <= amount <= upper_bound:
-            rows.append((_parse_date(txn["date"]), txn["ref"], amount))
-    return sorted(rows, key=lambda row: (row[0], row[1]))
+def _window(hits: list[Hit], start: date, window_days: int) -> list[Hit]:
+    """Hits dated from start to start + window_days - 1, both inclusive."""
+    last = start + timedelta(days=window_days - 1)
+    return [hit for hit in hits if start <= hit[0] <= last]
 
 
-def _densest_window(credits: list[tuple[date, str, float]], window_days: int) -> tuple[int, int]:
-    """Return (start, end) indices of the window with the most credits.
+def _fired(group: list[Hit]) -> dict:
+    """Result for a firing window. group is sorted by date."""
+    return {
+        "detected": True,
+        "occurrences": len(group),
+        "window_start": group[0][0].isoformat(),
+        "window_end": group[-1][0].isoformat(),
+        "refs": [ref for _, ref, _ in group],
+        "total": round(float(sum(amount for _, _, amount in group)), 2),
+    }
 
-    Each window is anchored at a credit and spans up to window_days calendar
-    days inclusive. The end index is exclusive. Earliest anchor wins ties.
-    """
-    best_start, best_end = 0, 0
-    for i, (day, _, _) in enumerate(credits):
-        j = i
-        while j < len(credits) and (credits[j][0] - day).days < window_days:
-            j += 1
-        if j - i > best_end - best_start:
-            best_start, best_end = i, j
-    return best_start, best_end
+
+def _not_fired(occurrences: int) -> dict:
+    """Result when no window reaches the occurrence threshold."""
+    return {
+        "detected": False,
+        "occurrences": occurrences,
+        "window_start": None,
+        "window_end": None,
+        "refs": [],
+        "total": 0.0,
+    }
 
 
 def detect_structuring(
@@ -55,36 +71,17 @@ def detect_structuring(
     occurrences: int = 3,
     window_days: int = 14,
 ) -> dict:
-    """Apply the AML-STR structuring rule to one alert's transactions.
+    """Evaluate AML-STR structuring over a list of transactions.
 
-    Each transaction is a dict with date (YYYYMMDD), ref, amount and direction
-    (CREDIT or DEBIT).
-
-    Returns a dict with keys detected, occurrences, window_start, window_end,
-    refs and total. When the rule does not fire, detected is False, refs is
-    empty, total is 0.0, both window fields are None, and occurrences is the
-    size of the densest window.
+    Each transaction has date (YYYYMMDD), ref, amount and direction (CREDIT or
+    DEBIT). The earliest window that meets the threshold is reported.
     """
-    credits = _qualifying_credits(transactions, lower_bound, upper_bound)
-    start, end = _densest_window(credits, window_days)
-    count = end - start
-
-    if count == 0 or count < occurrences:
-        return {
-            "detected": False,
-            "occurrences": count,
-            "window_start": None,
-            "window_end": None,
-            "refs": [],
-            "total": 0.0,
-        }
-
-    window = credits[start:end]
-    return {
-        "detected": True,
-        "occurrences": count,
-        "window_start": window[0][0].isoformat(),
-        "window_end": window[-1][0].isoformat(),
-        "refs": [ref for _, ref, _ in window],
-        "total": round(sum(amount for _, _, amount in window), 2),
-    }
+    hits = _qualifying(transactions, lower_bound, upper_bound)
+    best: list[Hit] = []
+    for start, _, _ in hits:
+        group = _window(hits, start, window_days)
+        if len(group) >= occurrences:
+            return _fired(group)
+        if len(group) > len(best):
+            best = group
+    return _not_fired(len(best))
