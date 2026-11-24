@@ -9,6 +9,7 @@ Run: uv run python checks/aml_check_04_build.py
 
 from __future__ import annotations
 
+import base64
 import json
 import re
 import shutil
@@ -16,6 +17,7 @@ import sys
 import tempfile
 from pathlib import Path
 
+from aml.build import bot, deliver
 from aml.build.claude_code import Generation
 from aml.build.evaluator import MIN_LENGTH, evaluate
 from aml.build.library import Library
@@ -186,6 +188,53 @@ if record_path.exists():
           ", ".join(k for k, e in regraded.items() if not e.passed) or "all 12")
 else:
     print("  SKIP  no real build yet: run scripts/run_build.py")
+
+print("\ndelivery: provenance comes from the run, and only passing runs ship")
+
+
+def _run(passed: bool, run_id: str = "development-20261124T101500Z") -> dict:
+    tests = [{"passed": 19, "failed": 1}, {"passed": 20, "failed": 0}]
+    return {
+        "phase_id": "development", "run_id": run_id, "model": "haiku",
+        "events": [{"kind": "tests", "data": t} for t in tests] + [{
+            "kind": "done",
+            "data": {"loop": {"passed": passed, "cost_usd": 0.0143, "attempts": [
+                {"number": 2, "outcome": "pass", "produced": ["src/detector.py"],
+                 "duration_s": 61.0, "cost_usd": 0.007}]}},
+        }],
+    }
+
+
+lines = deliver.trailers(_run(True), "T-002").splitlines()
+check("trailers carry task, stage, model and run ID",
+      lines[:4] == ["Task: T-002", "Stage: development", "Model: haiku",
+                    "Run-Id: development-20261124T101500Z"])
+check("trailers carry each attempt's acceptance result",
+      "Attempts: 2 (1: 19 passed 1 failed; 2: 20 passed)" in lines)
+check("trailers carry the measured cost, labelled",
+      "Cost-USD: 0.0143 (reported by Claude Code)" in lines)
+check("the files shipped are the passing attempt's",
+      deliver.final_files(_run(True)) == ["src/detector.py"])
+for label, record in (("a failed run", _run(False)), ("a run with no run ID", _run(True, ""))):
+    try:
+        deliver.check_deliverable(record)
+        check(f"{label} is refused", False)
+    except deliver.NotDeliverable as exc:
+        check(f"{label} is refused", True, str(exc))
+try:
+    bot.token(Path(tempfile.mkdtemp()) / "absent")
+    check("a missing bot token is refused", False)
+except bot.NotTheBot:
+    check("a missing bot token is refused", True)
+
+fake = "ghp_FAKE0000000000000000000000000000000"
+encoded = base64.b64encode(f"x-access-token:{fake}".encode()).decode()
+try:
+    deliver._git(["push", "origin", "refs/heads/no-such-branch-here"], deliver.ROOT, fake)
+    check("a failed git command never shows the credential", False, "push unexpectedly worked")
+except deliver.GitFailed as exc:
+    check("a failed git command never shows the credential",
+          fake not in str(exc) and encoded not in str(exc), str(exc)[:70])
 
 print(f"\n{'ALL CHECKS PASS' if not failures else 'FAILURES: ' + ', '.join(failures)}")
 sys.exit(1 if failures else 0)

@@ -21,7 +21,23 @@ from pathlib import Path
 from openpyxl import load_workbook
 
 ROOT = Path(__file__).resolve().parents[1]
-WORKBOOK = ROOT / "AntiMoneyLaundering" / "Alert_Final_table.xlsx"
+
+
+def main_checkout() -> Path:
+    """The primary checkout, even when run from a linked worktree.
+
+    The workbook is git-ignored, so it exists only in the primary checkout. A
+    worktree that looked for it under its own root would find nothing and
+    wave every push through.
+    """
+    common = subprocess.run(
+        ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
+        cwd=ROOT, capture_output=True, text=True, check=True,
+    ).stdout.strip()
+    return Path(common).parent
+
+
+WORKBOOK = main_checkout() / "AntiMoneyLaundering" / "Alert_Final_table.xlsx"
 
 FORBIDDEN_PATHS = (
     "AntiMoneyLaundering/",
