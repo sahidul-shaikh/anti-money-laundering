@@ -17,7 +17,8 @@ import sys
 import tempfile
 from pathlib import Path
 
-from aml.build import bot, deliver, delivery_state
+from aml.build import bot, deliver, delivery_state, planning
+from aml.build.deliver import ROOT
 from aml.build.claude_code import Generation
 from aml.build.evaluator import MIN_LENGTH, evaluate
 from aml.build.library import Library
@@ -326,6 +327,27 @@ check("a refused delivery shows on Commit, not silently",
       shown("refused", error="already delivered")["Commit"] == "failed")
 check("once the PR exists, it wins over the delivery record",
       states([_pr("OPEN")], delivering={**underway, "step": "pr"})["Pull request"] == "done")
+
+print("\nnothing is built without a plan a person accepted")
+plan = {"task": "T-009", "started_at": "2026-11-24T12:00:00Z", "accepted_by": "sahidul-shaikh",
+        "error": "", "text": "## What will be built\nthe detector"}
+planned = lambda step: states(merged_before, cycle_start=plan["started_at"],  # noqa: E731
+                              planning={**plan, "step": step})
+check("drafting: Plan runs, and the previous PR is not this cycle's",
+      planned("drafting")["Plan"] == "running" and planned("drafting")["Merged"] == "pending")
+check("drafted: Plan waits for a human", planned("waiting")["Plan"] == "waiting")
+check("accepted: Plan is done", planned("accepted")["Plan"] == "done")
+check("a plan in drafting starts a new cycle",
+      delivery_state.cycle([{"createdAt": "2026-11-24T11:00:00Z"}], None, None, plan)
+      == (plan["started_at"], None))
+check("an older undelivered run is not shown as the new plan's build",
+      delivery_state.cycle([], None, {**fresh_run, "started_at": "2026-11-24T11:30:00Z"}, plan)[1] is None)
+with_plan = {**_run(True), "plan": {"accepted_by": "sahidul-shaikh", "text": "x"}}
+check("the delivered commit names who accepted the plan",
+      "Plan-Accepted-By: sahidul-shaikh" in deliver.trailers(with_plan, "T-006").splitlines())
+check("a planned prompt never states the withheld rules",
+      not [f for f in WITHHELD_FACTS
+           if f in planning.plan_prompt((ROOT / "tasks/T-006/intent.md").read_text(encoding="utf-8"), True)])
 
 print(f"\n{'ALL CHECKS PASS' if not failures else 'FAILURES: ' + ', '.join(failures)}")
 sys.exit(1 if failures else 0)

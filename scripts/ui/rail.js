@@ -26,8 +26,10 @@
       <div class="st-body">
         <div class="st-label">${esc(s.label)}${live && s.since
           ? ` <span class="st-time" data-since="${esc(s.since)}">${elapsed(s.since)}</span>` : ""}</div>
-        ${detail ? `<div class="st-detail">${s.link
-          ? `<a href="${esc(s.link)}" target="_blank" rel="noopener">${detail}</a>` : detail}</div>` : ""}
+        ${detail || s.doc ? `<div class="st-detail">${s.doc
+          ? `<a href="#" data-doc="${esc(s.doc)}" title="open the document">${detail || "open"}</a>`
+          : s.link ? `<a href="${esc(s.link)}" target="_blank" rel="noopener">${detail}</a>`
+          : detail}</div>` : ""}
       </div></div>`;
   };
 
@@ -102,6 +104,34 @@
     refresh();
   }
 
-  window.FactoryRail = { chainHtml, refresh, setFocus, current: () => snapshot };
+  /* ---- the document a station points at: intent, plan, this run's plan ---- */
+
+  async function openDoc(ref) {
+    const [task, name] = ref.split("/");
+    const r = await api(`/api/doc?task=${encodeURIComponent(task)}&name=${encodeURIComponent(name)}`);
+    const d = await r.json();
+    let box = document.getElementById("doc-view");
+    if (!box) {
+      box = document.createElement("div");
+      box.id = "doc-view";
+      box.addEventListener("click", (e) => { if (e.target === box || e.target.dataset.close) box.remove(); });
+      document.body.appendChild(box);
+    }
+    box.innerHTML = `<div class="doc-card"><div class="doc-head"><b>${esc(d.title || ref)}</b>
+      <button class="link" data-close="1">close</button></div>
+      <pre class="doc-text">${esc(d.text || d.error)}</pre></div>`;
+  }
+
+  document.addEventListener("click", (e) => {
+    const a = e.target.closest("[data-doc]");
+    if (!a) return;
+    e.preventDefault();
+    openDoc(a.dataset.doc);
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && document.getElementById("doc-view")) document.getElementById("doc-view").remove();
+  });
+
+  window.FactoryRail = { chainHtml, refresh, setFocus, openDoc, current: () => snapshot };
   mount();
 })();

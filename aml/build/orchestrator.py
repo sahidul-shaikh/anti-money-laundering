@@ -62,8 +62,10 @@ def build_prompt(
     brief: ProductBrief | None = None,
     library: Library | None = None,
     withhold_rules: bool = False,
+    plan: str = "",
 ) -> str:
-    """The human's intent, this stage's brief, and what upstream produced."""
+    """The human's intent, this stage's brief, what upstream produced, and the
+    plan a person accepted for this run, if there is one."""
     brief = brief or load_brief()
     # The brief's constraints are extracted from the same requirements that
     # withholding leaves out, and restate them. A withheld code stage gets
@@ -123,6 +125,8 @@ def build_prompt(
         parts += ["", "WHAT EARLIER STAGES PRODUCED", ""]
         for phase_id, body in upstream.items():
             parts += [f"--- {phase_id} ---", body[:6000], ""]
+    if plan:
+        parts += ["", "THE PLAN A PERSON ACCEPTED FOR THIS RUN - implement against it", "", plan, ""]
     return "\n".join(parts)
 
 

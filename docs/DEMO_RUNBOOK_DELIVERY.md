@@ -62,17 +62,33 @@ rail follows the demonstration task. Click **AI builds AI**.
 
 ### Beat 1 - The intent (30 s)
 
-Open `tasks/T-006/intent.md` in the editor or on GitHub.
+On the rail, click the text under **Intent** ("Sahidul Shaikh - accepted").
+The intent opens in the console.
 
 > One person wrote what they want in plain words. The factory works from this
 > file and nothing else, and the file is in git with its author.
 
-### Beat 2 - The build loop (about 2 minutes)
+### Beat 2 - The plan, and the first human gate (about 1 minute)
 
 **AI builds AI → 04 Loops.** Model `haiku`, **withhold the rule detail**
-ticked. Press **run the implementation stage**.
+ticked. Press **draft a plan for this run**.
 
-Watch the rail: **Build loop** pulses, "attempt 1 of 3".
+Rail: **Plan** pulses while Claude drafts (about 15 to 30 s, under a cent),
+then turns amber, "waiting for a human". The plan appears in the panel; it can
+also be opened from the rail.
+
+> Nothing is built without a plan a person accepted. The plan was drafted from
+> the intent and the same withheld contract the build gets, so it cannot give
+> the answer away - notice it says where the contract is silent.
+
+Press **accept plan - start the build**. Your GitHub login is recorded as the
+person who accepted it, and travels with the delivered PR (`Plan-Accepted-By`
+trailer and the plan file).
+
+### Beat 2b - The build loop (about 2 minutes)
+
+Accepting the plan starts it. Watch the rail: **Build loop** pulses,
+"attempt 1 of 3".
 
 > Part of the contract is withheld. The first attempt has to guess. A test
 > suite it has never seen is about to tell it where it guessed wrong.

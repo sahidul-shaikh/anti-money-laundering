@@ -32,8 +32,34 @@ _cache: dict = {"at": 0.0, "prs": []}
 
 
 def station(state: str, label: str, detail: str = "", link: str = "",
-            since: str = "") -> dict:
-    return {"state": state, "label": label, "detail": detail, "link": link, "since": since}
+            since: str = "", doc: str = "") -> dict:
+    """One station. `doc` names a document the console can open: "T-006/intent",
+    "T-006/plan", or "T-006/runplan" for the plan drafted for this run."""
+    return {"state": state, "label": label, "detail": detail, "link": link,
+            "since": since, "doc": doc}
+
+
+def plan_station(task: dict, code: list[dict], planning: dict | None) -> dict:
+    """The plan for this cycle's run if there is one; otherwise the task's own plan."""
+    doc = f"{task['id']}/runplan"
+    if planning:
+        step, since = planning["step"], planning["started_at"]
+        if step == "drafting":
+            return station("running", "Plan", "drafting a plan for this run", "", since)
+        if step == "waiting":
+            return station("waiting", "Plan", "waiting for a human: accept it on 04 Loops",
+                           "", since, doc)
+        if step == "accepted":
+            return station("done", "Plan", f"accepted by {planning['accepted_by']}", doc=doc)
+        return station("failed", "Plan", "drafting failed: " + planning["error"])
+    accepted = [c for c in code if c["trailers"].get("Plan-Accepted-By")]
+    if accepted:
+        t, oid = accepted[-1]["trailers"], accepted[-1]["oid"]
+        return station("done", "Plan", f"run plan accepted by {t['Plan-Accepted-By']}",
+                       f"https://github.com/{REPO}/blob/{oid}/{t['Plan']}")
+    status = task["plan_status"]
+    return station("done" if status.startswith("accepted") else "waiting" if status else "pending",
+                   "Plan", status, doc=f"{task['id']}/plan")
 
 
 # -- pure derivation ------------------------------------------------------
@@ -134,7 +160,8 @@ def commit_and_pr(code: list[dict], pr: dict | None, delivering: dict | None) ->
 
 def chain(task: dict, prs: list[dict], live: dict | None = None,
           recorded: set[str] = frozenset(), cycle_start: str = "",
-          fresh: dict | None = None, delivering: dict | None = None) -> list[dict]:
+          fresh: dict | None = None, delivering: dict | None = None,
+          planning: dict | None = None) -> list[dict]:
     """The eight stations for one task. `prs` are the task's PRs, oldest first;
     `recorded` is the run IDs that have a run record on disk.
 
@@ -159,9 +186,9 @@ def chain(task: dict, prs: list[dict], live: dict | None = None,
                        + ("" if fresh["passed"] else " - refused, nothing to deliver"))
     return [
         station("done" if task["intent_status"] == "accepted" else "waiting", "Intent",
-                f"{task['intent_author']} - {task['intent_status']}"),
-        station("done" if task["plan_status"].startswith("accepted") else
-                "waiting" if task["plan_status"] else "pending", "Plan", task["plan_status"]),
+                f"{task['intent_author']} - {task['intent_status']}", doc=f"{task['id']}/intent"),
+        plan_station(task, code, planning if planning and cycle_start
+                     and planning["started_at"] >= cycle_start else None),
         loop,
         *commit_and_pr(code, pr, delivering),
         ci,
@@ -249,18 +276,25 @@ def default_focus(tasks: list[dict], by_task: dict[str, list[dict]]) -> str | No
     return (with_open or unmerged or tasks or [{"id": None}])[-1]["id"]
 
 
-def cycle(prs: list[dict], live: dict | None, run: dict | None) -> tuple[str, dict | None]:
-    """When the focus task's current cycle began, and its undelivered run, if any."""
-    if live:
-        return live["started_at"], None
+def cycle(prs: list[dict], live: dict | None, run: dict | None,
+          plan: dict | None = None) -> tuple[str, dict | None]:
+    """When the focus task's current cycle began, and its undelivered run, if any.
+
+    A cycle begins with a plan being drafted, a live run, or a run newer than
+    the task's last PR - whichever came first and is newer than that PR.
+    """
     last_pr = max((p["createdAt"] for p in prs), default="")
-    if run and run["started_at"] > last_pr:
-        return run["started_at"], run
-    return "", None
+    plan_start = plan["started_at"] if plan and plan["started_at"] > last_pr else ""
+    starts = [s for s in (plan_start, live and live["started_at"]) if s and s > last_pr]
+    fresh = None
+    if not live and run and run["started_at"] > last_pr and run["started_at"] >= plan_start:
+        fresh = run
+        starts.append(run["started_at"])
+    return (min(starts) if starts else ""), fresh
 
 
 def snapshot(live: dict | None = None, focus: str | None = None,
-             delivering: dict | None = None) -> dict:
+             delivering: dict | None = None, planning: dict | None = None) -> dict:
     """Every task's chain, the focus task, and PRs that belong to no task.
 
     `focus` is the task the presenter chose; the live run, any undelivered
@@ -278,13 +312,15 @@ def snapshot(live: dict | None = None, focus: str | None = None,
         focus = default_focus(tasks, by_task)
     # A build run can only belong to a task that accepts factory deliveries.
     takes_runs = any(t["id"] == focus and t["deliverable"] for t in tasks)
-    start, fresh = cycle(by_task.get(focus, []), live, latest_build_run()) if takes_runs else ("", None)
+    plan = planning if planning and planning.get("task") == focus else None
+    start, fresh = (cycle(by_task.get(focus, []), live, latest_build_run(), plan)
+                    if takes_runs else ("", None))
 
     def task_chain(t: dict) -> list[dict]:
         if t["id"] != focus or not takes_runs:
             return chain(t, by_task.get(t["id"], []), recorded=recorded)
         mine = delivering if delivering and delivering.get("task") == focus else None
-        return chain(t, by_task.get(t["id"], []), live, recorded, start, fresh, mine)
+        return chain(t, by_task.get(t["id"], []), live, recorded, start, fresh, mine, plan)
 
     return {
         "focus": focus,
