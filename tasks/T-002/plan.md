@@ -55,3 +55,29 @@ the command line so it can be proven on its own.
 - Both CI checks green on it.
 - Refusal paths shown: failed run, wrong identity, real data in the push.
 - Five checks pass.
+
+## Implementation notes (departures from this plan)
+- **pytest was not a project dependency.** The first live run failed all
+  three attempts with "the acceptance suite did not run" ($0.024 wasted). CI
+  had masked it by installing pytest for its own step. Added as a dev
+  dependency; the next run passed.
+- **The pre-push hook broke inside worktrees.** A fresh worktree got an empty
+  environment, the scan crashed, and the hook reported "real customer data".
+  The hook now runs the primary checkout's script and environment, and no
+  longer claims a leak when the scan could not run. Delivery pushes with the
+  primary checkout's hooks and also runs the scan itself before pushing.
+- **The bot token leaked once.** The first delivery attempt failed, and the
+  exception printed the git command, whose auth header carried the token in
+  base64. Nothing reached GitHub. The token was revoked and replaced. Root
+  cause fixed: the token now travels only in environment variables, git
+  failures carry git's own message, and check 04 asserts a failing command
+  never shows the credential.
+- **The demo's first-attempt failure did not happen.** With the rules
+  withheld, attempt 1 passed (20/20) in this run and in the previous recorded
+  one. Separate finding, outside this task.
+
+## Result
+Run `development-20261124T043801Z` (haiku, 1 attempt, 20/20, $0.00766 as
+reported by Claude Code) delivered by `scripts/deliver.py` as PR #4: PR and
+commit authored by aml-factory-bot, commit trailers byte-identical to the run
+record, diff limited to the two files the passing attempt wrote.
