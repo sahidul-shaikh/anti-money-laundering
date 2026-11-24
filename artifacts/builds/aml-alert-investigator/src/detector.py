@@ -1,50 +1,75 @@
-"""Actimize AML-STR structuring detector, rule AML-STR-CCE-INN-A-D01-DST.
+"""Actimize AML-STR-CCE-INN-A-D01-DST: structuring detector.
 
-Implementer judgements where the contract is silent:
-- Only CREDIT transactions count (inbound structuring). DEBIT rows are ignored.
-- Amount bounds are inclusive: lower_bound <= amount <= upper_bound.
-- A window of N days spans N calendar days inclusive: start d covers d .. d + (N - 1).
-- Windows are anchored on each distinct qualifying date. The reported window has the
-  most qualifying transactions; ties go to the earliest start date.
-- Filters apply in order: direction, then bounds, then window count.
-- Input dates are YYYYMMDD. window_start and window_end are returned in ISO-8601
-  (YYYY-MM-DD), taken from the first and last qualifying transaction in the reported
-  window. Both are None when not detected.
-- occurrences is the best window count, returned whether or not the rule fires.
-- total is the sum of amounts in refs, rounded to 2 dp. It is 0.0 when not detected.
+Judgements where the requirement is silent:
+- Qualifying: direction == "credit" (case-insensitive) and lower_bound <= amount <= upper_bound.
+  Both bounds are inclusive.
+- Window: a window anchored on day D covers D through D + window_days - 1. Inclusive, so
+  14 days span 14 calendar days.
+- Fires when some window holds at least `occurrences` qualifying transactions. The earliest
+  firing window is reported.
+- window_start and window_end are the ISO-8601 dates (YYYY-MM-DD) of the first and last
+  qualifying transactions in the reported window, not the nominal window edges. Transaction
+  dates remain YYYYMMDD on input.
+- refs: qualifying transactions in the reported window, ordered by date. Equal dates keep input order.
+- total: sum of their amounts, rounded to 2 dp once, at the end.
+- occurrences: qualifying count in the reported window. When not detected, the peak count in any window.
+- Not detected: window_start and window_end are None, refs is [], total is 0.0.
 """
 
 from datetime import date, datetime, timedelta
 
-INPUT_DATE_FORMAT = "%Y%m%d"
-OUTPUT_DATE_FORMAT = "%Y-%m-%d"
-DIRECTION = "CREDIT"
+QUALIFYING_DIRECTION = "credit"
 
 
-def _parse_date(text: str) -> date:
-    """Parse a YYYYMMDD string."""
-    return datetime.strptime(text, INPUT_DATE_FORMAT).date()
+def _day(txn: dict) -> date:
+    """Parse the YYYYMMDD date of a transaction."""
+    return datetime.strptime(str(txn["date"]), "%Y%m%d").date()
 
 
-def _qualifying(transactions: list[dict], lower_bound: float, upper_bound: float) -> list[dict]:
-    """Keep CREDIT rows within the inclusive bounds, sorted by date (stable)."""
-    kept = []
-    for t in transactions:
-        amount = float(t["amount"])
-        if t["direction"] == DIRECTION and lower_bound <= amount <= upper_bound:
-            kept.append({"date": _parse_date(t["date"]), "ref": t["ref"], "amount": amount})
-    return sorted(kept, key=lambda t: t["date"])
+def _qualifies(txn: dict, lower_bound: float, upper_bound: float) -> bool:
+    """True when the transaction is in the counted direction and inside the amount bounds."""
+    return (
+        str(txn["direction"]).lower() == QUALIFYING_DIRECTION
+        and lower_bound <= txn["amount"] <= upper_bound
+    )
 
 
-def _best_window(items: list[dict], window_days: int) -> list[dict]:
-    """Largest group of items dated within [start, start + window_days - 1]."""
-    best: list[dict] = []
-    for start in sorted({t["date"] for t in items}):
-        last = start + timedelta(days=window_days - 1)
-        group = [t for t in items if start <= t["date"] <= last]
-        if len(group) > len(best):
-            best = group
-    return best
+def _window_from(hits: list[dict], start: int, window_days: int) -> list[dict]:
+    """Qualifying transactions from hits[start] onward that fall within window_days of it.
+
+    hits must be sorted by date.
+    """
+    last = _day(hits[start]) + timedelta(days=window_days - 1)
+    members = []
+    for txn in hits[start:]:
+        if _day(txn) > last:
+            break
+        members.append(txn)
+    return members
+
+
+def _detected(members: list[dict]) -> dict:
+    """Result for a firing window."""
+    return {
+        "detected": True,
+        "occurrences": len(members),
+        "window_start": _day(members[0]).isoformat(),
+        "window_end": _day(members[-1]).isoformat(),
+        "refs": [t["ref"] for t in members],
+        "total": round(sum(t["amount"] for t in members), 2),
+    }
+
+
+def _not_detected(peak_count: int) -> dict:
+    """Result when no window reaches the occurrence count."""
+    return {
+        "detected": False,
+        "occurrences": peak_count,
+        "window_start": None,
+        "window_end": None,
+        "refs": [],
+        "total": 0.0,
+    }
 
 
 def detect_structuring(
@@ -54,27 +79,15 @@ def detect_structuring(
     occurrences: int = 3,
     window_days: int = 14,
 ) -> dict:
-    """Detect structured CREDIT transactions within a rolling window.
-
-    Returns keys: detected, occurrences, window_start, window_end, refs, total.
-    Window dates are ISO-8601 (YYYY-MM-DD).
-    """
-    best = _best_window(_qualifying(transactions, lower_bound, upper_bound), window_days)
-    count = len(best)
-    if not best or count < occurrences:
-        return {
-            "detected": False,
-            "occurrences": count,
-            "window_start": None,
-            "window_end": None,
-            "refs": [],
-            "total": 0.0,
-        }
-    return {
-        "detected": True,
-        "occurrences": count,
-        "window_start": best[0]["date"].strftime(OUTPUT_DATE_FORMAT),
-        "window_end": best[-1]["date"].strftime(OUTPUT_DATE_FORMAT),
-        "refs": [t["ref"] for t in best],
-        "total": round(sum(t["amount"] for t in best), 2),
-    }
+    """Detect repeated just-below-threshold credits within a rolling window."""
+    hits = sorted(
+        (t for t in transactions if _qualifies(t, lower_bound, upper_bound)),
+        key=_day,
+    )
+    peak = 0
+    for start in range(len(hits)):
+        members = _window_from(hits, start, window_days)
+        if len(members) >= occurrences:
+            return _detected(members)
+        peak = max(peak, len(members))
+    return _not_detected(peak)
