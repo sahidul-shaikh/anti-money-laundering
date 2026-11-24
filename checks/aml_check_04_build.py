@@ -264,7 +264,7 @@ def _pr(state: str, reviews: tuple = (), checks: str = "SUCCESS") -> dict:
         "mergedBy": {"login": "owner"},
         "reviews": [{"state": r, "author": {"login": "owner"}, "submittedAt": "x"} for r in reviews],
         "statusCheckRollup": [{"name": "attack suite", "status": "COMPLETED" if checks != "RUNNING" else
-                               "IN_PROGRESS", "conclusion": None if checks == "RUNNING" else checks,
+                               "IN_PROGRESS", "conclusion": "" if checks == "RUNNING" else checks,
                                "startedAt": "2026-11-24T10:01:00Z"}],
         "commits": [{"oid": "abc1234def", "messageHeadline": "T-009: code",
                      "authors": [{"login": "aml-factory-bot"}],

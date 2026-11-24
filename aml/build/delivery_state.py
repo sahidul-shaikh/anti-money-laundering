@@ -51,8 +51,11 @@ def ci_station(pr: dict | None) -> dict:
     checks = pr.get("statusCheckRollup") or []
     if not checks:
         return station("pending", "CI", "no checks yet")
+    # GitHub reports a running check's conclusion as "", not null: only a
+    # completed check can have failed.
     running = [c for c in checks if c.get("status") != "COMPLETED"]
-    failed = [c["name"] for c in checks if c.get("conclusion") not in (None, "SUCCESS", "SKIPPED")]
+    failed = [c["name"] for c in checks
+              if c.get("status") == "COMPLETED" and c.get("conclusion") not in ("SUCCESS", "SKIPPED")]
     names = ", ".join(c["name"] for c in checks)
     if failed:
         return station("failed", "CI", "failed: " + ", ".join(failed), pr["url"] + "/checks")
