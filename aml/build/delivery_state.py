@@ -74,7 +74,9 @@ def approval_station(pr: dict | None, ci: dict) -> dict:
         return station("done", "Human approval", f"approved by {last['author']['login']}",
                        pr["url"], last.get("submittedAt", ""))
     if pr["state"] == "OPEN" and ci["state"] == "done":
-        return station("waiting", "Human approval", "waiting for a human", pr["url"], pr["createdAt"])
+        # The wait for a human starts when the last check went green.
+        green = max(c.get("completedAt") or "" for c in pr["statusCheckRollup"])
+        return station("waiting", "Human approval", "waiting for a human", pr["url"], green)
     if pr["state"] == "MERGED":
         return station("override", "Human approval", "no approving review", pr["url"])
     return station("pending", "Human approval")

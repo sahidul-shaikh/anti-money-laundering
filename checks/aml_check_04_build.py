@@ -215,7 +215,8 @@ check("trailers carry the measured cost, labelled",
       "Cost-USD: 0.0143 (reported by Claude Code)" in lines)
 check("the files shipped are the passing attempt's",
       deliver.final_files(_run(True)) == ["src/detector.py"])
-for label, record in (("a failed run", _run(False)), ("a run with no run ID", _run(True, ""))):
+for label, record in (("a failed run", _run(False)), ("a run with no run ID", _run(True, "")),
+                      ("a passing run whose record is missing", _run(True))):
     try:
         deliver.check_deliverable(record)
         check(f"{label} is refused", False)

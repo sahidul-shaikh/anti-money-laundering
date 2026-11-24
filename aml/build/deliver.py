@@ -57,6 +57,8 @@ def check_deliverable(run: dict) -> None:
         raise NotDeliverable("run has no run ID (recorded before run IDs existed)")
     if not done_event(run).get("loop", {}).get("passed"):
         raise NotDeliverable(f"run {run['run_id']} did not pass the acceptance suite")
+    if not (ROOT / record_path(run)).exists():
+        raise NotDeliverable(f"no run record at {record_path(run).as_posix()}")
 
 
 def attempts_line(run: dict) -> str:
@@ -81,6 +83,11 @@ def trailers(run: dict, task: str) -> str:
         f"Cost-USD: {loop['cost_usd']} (reported by Claude Code)",
         f"Verified-By: {ACCEPTANCE}",
     ])
+
+
+def record_path(run: dict) -> Path:
+    """Where a run's own record lives, relative to the repository root."""
+    return Path("artifacts/live/runs") / f"{run['run_id']}.json"
 
 
 def final_files(run: dict) -> list[str]:
@@ -136,12 +143,13 @@ def deliver(task: str, phase: str = "development") -> Delivery:
     tree = workdir / "tree"
     try:
         _git(["worktree", "add", "-q", "-b", branch, str(tree), "origin/main"], ROOT)
-        for name in final_files(run):
-            source = ROOT / BUILD_DIR / name
-            target = tree / BUILD_DIR / name
+        # The generated files, and the run record their trailers summarise.
+        shipped = [BUILD_DIR / name for name in final_files(run)] + [record_path(run)]
+        for relative in shipped:
+            target = tree / relative
             target.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copyfile(source, target)
-            _git(["add", str(BUILD_DIR / name)], tree)
+            shutil.copyfile(ROOT / relative, target)
+            _git(["add", str(relative)], tree)
         title = f"{task}: {phase} output from run {run['run_id']}"
         message = f"{title}\n\n{trailers(run, task)}\n"
         _git(["commit", "-q", "-m", message], tree, secret)

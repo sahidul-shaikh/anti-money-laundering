@@ -688,8 +688,11 @@ def save_run_summary(run: Run, model: str, withheld: bool) -> None:
         "finished_at": time.strftime("%Y-%m-%d %H:%M:%S"),
         "events": kept,
     }
-    path = LIVE_DIR / f"{run.phase_id}.run.json"
-    path.write_text(json.dumps(summary, indent=2), encoding="utf-8")
+    record = json.dumps(summary, indent=2)
+    (LIVE_DIR / f"{run.phase_id}.run.json").write_text(record, encoding="utf-8")
+    # One record per run, named by its run ID, so a delivery can carry its evidence.
+    (LIVE_DIR / "runs").mkdir(exist_ok=True)
+    (LIVE_DIR / "runs" / f"{run.run_id}.json").write_text(record, encoding="utf-8")
 
 
 def last_run(phase_id: str) -> dict:

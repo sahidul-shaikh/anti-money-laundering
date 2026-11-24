@@ -20,11 +20,11 @@ hold.
 
 ---
 
-## The four pillars and their 17 disciplines
+## The four pillars and their 18 disciplines
 
 | Pillar | Claim | Disciplines |
 |---|---|---|
-| **AI builds AI** | From individual craftsmanship into a repeatable engineering factory | Specs · Context · Skills · Loops · Graphs · Evaluation |
+| **AI builds AI** | From individual craftsmanship into a repeatable engineering factory | Specs · Context · Skills · Loops · Graphs · Evaluation · Delivery |
 | **AI runs AI** | A self-operating estate that adds capacity without adding operations cost | Routing · Reliability · Observability · FinOps |
 | **AI secures AI** | Security engineered in at build time, defended live, hardened by what production teaches | Threat modelling · Runtime defense · Swarm pen-testing |
 | **AI improves AI** | Every production cycle leaves the estate measurably better than the last | Harness · Tokenomics · Failure mining · Value engineering |
@@ -35,6 +35,7 @@ thing. The console routes are:
 ```
 /builds/specs  /builds/context  /builds/skills
 /builds/loops  /builds/graphs   /builds/evaluation
+/builds/delivery
 /runs/routing  /runs/reliability  /runs/observability  /runs/finops
 /secures/threat-modelling  /secures/runtime-defense  /secures/swarm
 /improves/harness  /improves/tokenomics  /improves/failure-mining  /improves/value-engineering

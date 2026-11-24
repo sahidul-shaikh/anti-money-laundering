@@ -15,7 +15,7 @@ An **AI Engineering Factory** demonstration built around a single real use
 case: an **AML alert investigator** that reads a transaction-monitoring alert
 and recommends escalate / close / insufficient-information, with evidence. The
 demonstration proves four pillars — **AI builds AI, AI runs AI, AI secures AI,
-AI improves AI** — against that one product, with 17 live panels. Every panel
+AI improves AI** — against that one product, with 18 live panels. Every panel
 makes a real call against a real model and shows what it cost and whether it
 was right. Nothing is mocked.
 
@@ -37,7 +37,7 @@ works, not a constraint on what comes next.
 
 | # | File | Why |
 |---|---|---|
-| 1 | `brief/01-what-we-are-building.md` | The four pillars, the 17 disciplines, the argument |
+| 1 | `brief/01-what-we-are-building.md` | The four pillars, the 18 disciplines, the argument |
 | 2 | `brief/02-the-aml-use-case.md` | The problem, the real data, the value contract |
 | 3 | `brief/03-how-it-is-built.md` | Module map and the path of one alert |
 | 4 | `brief/04-what-exists-today.md` | **Honest inventory — proven, partial, not built** |
@@ -67,8 +67,8 @@ uv sync                                  # once
 uv run python scripts/serve_factory.py   # then open http://localhost:8765
 ```
 
-All four pillars and all 17 panels are enabled. Verified working from this
-folder: **17 panels, 0 JavaScript errors, all five checks passing.**
+All four pillars and all 18 panels are enabled. Verified working from this
+folder: **18 panels, 0 JavaScript errors, all five checks passing.**
 
 ```bash
 for f in checks/aml_check_0*.py; do uv run python "$f"; done

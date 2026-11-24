@@ -68,7 +68,7 @@ failures:
   the previous session.
 - Restart the server for changes to `serve_factory.py` or anything in `aml/`.
   Browser reload is enough for `scripts/ui/`.
-- After any UI change, sweep all 17 panels for JavaScript errors before
+- After any UI change, sweep all 18 panels for JavaScript errors before
   declaring it done.
 
 ---

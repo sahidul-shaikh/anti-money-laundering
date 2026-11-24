@@ -4,7 +4,9 @@ From intent T-006. Status: accepted by Sahidul Shaikh (in session, 2026-11-24).
 
 ## Files that change
 `artifacts/builds/aml-alert-investigator/src/detector.py` and
-`tests/test_detector.py`, written by the build loop. Nothing else.
+`tests/test_detector.py`, written by the build loop, plus the run's own record
+`artifacts/live/runs/<run_id>.json`, which the commit trailers summarise.
+Nothing else.
 
 ## Order of work
 1. Builds / Loops: run the implementation stage with the rules withheld.
