@@ -65,8 +65,12 @@ def build_prompt(
 ) -> str:
     """The human's intent, this stage's brief, and what upstream produced."""
     brief = brief or load_brief()
+    # The brief's constraints are extracted from the same requirements that
+    # withholding leaves out, and restate them. A withheld code stage gets
+    # the preamble without them, or the handicap withholds nothing.
+    withheld = withhold_rules and phase.kind == "code"
     parts = [
-        brief.preamble(),
+        brief.preamble(include_constraints=not withheld),
         "",
         f"YOUR STAGE: {phase.name}",
         f"BRIEF: {phase.brief}",
