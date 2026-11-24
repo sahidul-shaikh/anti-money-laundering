@@ -56,3 +56,39 @@ Intent, Plan, Build loop, Commit, Pull request, CI, Human approval, Merged.
 ## Proof
 Screenshots of each station state from real data, the sweep result, check 04
 results, and CI on the PR.
+
+## Implementation notes (departures from this plan)
+- **GitHub query limit.** One `gh pr list` with commits and authors for 100
+  PRs exceeds GitHub's 500,000-node ceiling. Limited to the 30 most recent
+  PRs, stated in the code.
+- **A run ID alone is not a loop run.** T-001 carried a run ID for an
+  interactive session; the first chain showed it as a loop run with "?"
+  values. A station is "done" only when the run's record exists.
+- **"CI failed" while CI was running.** GitHub reports an in-progress check's
+  conclusion as "" rather than null; the rail read that as failure. The check
+  04 sample had used null, so it did not catch it. Proved the realistic sample
+  fails on the old logic, then fixed both.
+- **Waiting time** is measured from the last check going green, not from the
+  PR opening.
+- **No default task** in the deliver picker, so a careless click cannot put a
+  false record in git.
+- **Deliveries carry their run record.** The server saves every run under
+  `artifacts/live/runs/<run_id>.json`; delivery commits it with the generated
+  files and refuses a run whose record is missing. Closes the T-002 gap.
+- **Demo task T-006** added (intent by the human) so live deliveries are filed
+  against a task the loop's output actually serves.
+- `artifacts/live/development.run.json` is now the T-006 demonstration run,
+  so the Loops panel's recorded card shows it.
+
+## Result
+- History read true: T-001 owner override; T-002, T-003 approved; setup PRs
+  #1 and #2 shown as having no task.
+- 18 panels, 0 JavaScript errors; the 17 existing panels unchanged except the
+  Builds counter.
+- Live, from the console: run `development-20261124T070341Z` (attempt 1
+  19/20, attempt 2 20/20, $0.01534) delivered by the Delivery panel's button
+  as #8 with its run record; the rail showed the loop running, CI running,
+  waiting for a human, then all eight stations done after the human approved
+  and merged.
+- Check 04: delivery refusals, chain derivation (override, waiting, running,
+  failed, record required, live loop); five checks pass.

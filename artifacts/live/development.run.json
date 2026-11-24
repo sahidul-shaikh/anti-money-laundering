@@ -1,9 +1,9 @@
 {
   "phase_id": "development",
-  "run_id": "development-20261124T053435Z",
+  "run_id": "development-20261124T070341Z",
   "model": "haiku",
   "rules_withheld": true,
-  "finished_at": "2026-11-24 11:06:05",
+  "finished_at": "2026-11-24 12:35:15",
   "events": [
     {
       "kind": "starting",
@@ -35,18 +35,18 @@
     },
     {
       "kind": "files",
-      "elapsed_s": 48.62,
+      "elapsed_s": 55.17,
       "text": "src/detector.py, tests/test_detector.py",
       "data": {
         "files": {
-          "src/detector.py": 3171,
-          "tests/test_detector.py": 3643
+          "src/detector.py": 3048,
+          "tests/test_detector.py": 4114
         }
       }
     },
     {
       "kind": "tests",
-      "elapsed_s": 52.56,
+      "elapsed_s": 58.52,
       "text": "19 passed, 1 failed",
       "data": {
         "passed": 19,
@@ -54,12 +54,12 @@
         "errors": 0,
         "ok": false,
         "summary": "19 passed, 1 failed",
-        "output": "...F................                                                     [100%]\n================================== FAILURES ===================================\n_______________ test_window_dates_are_iso_not_the_input_format ________________\nchecks\\acceptance\\test_detector_contract.py:87: in test_window_dates_are_iso_not_the_input_format\n    assert result[\"window_start\"] == \"2018-11-01\", (\nE   AssertionError: window_start is ISO-8601. Only the two window dates in the result are reformatted: transactions still arrive as YYYYMMDD and everything else about reading them is unchanged.\nE   assert '20181101' == '2018-11-01'\nE     \nE     - 2018-11-01\nE     ?     -  -\nE     + 20181101\n=========================== short test summary info ===========================\nFAILED checks/acceptance/test_detector_contract.py::test_window_dates_are_iso_not_the_input_format\n1 failed, 19 passed in 0.29s\n"
+        "output": "...F................                                                     [100%]\n================================== FAILURES ===================================\n_______________ test_window_dates_are_iso_not_the_input_format ________________\nchecks\\acceptance\\test_detector_contract.py:87: in test_window_dates_are_iso_not_the_input_format\n    assert result[\"window_start\"] == \"2018-11-01\", (\nE   AssertionError: window_start is ISO-8601. Only the two window dates in the result are reformatted: transactions still arrive as YYYYMMDD and everything else about reading them is unchanged.\nE   assert '20181101' == '2018-11-01'\nE     \nE     - 2018-11-01\nE     ?     -  -\nE     + 20181101\n=========================== short test summary info ===========================\nFAILED checks/acceptance/test_detector_contract.py::test_window_dates_are_iso_not_the_input_format\n1 failed, 19 passed in 0.24s\n"
       }
     },
     {
       "kind": "attempt",
-      "elapsed_s": 52.61,
+      "elapsed_s": 58.55,
       "text": "attempt 2",
       "data": {
         "has_feedback": true
@@ -67,18 +67,18 @@
     },
     {
       "kind": "files",
-      "elapsed_s": 86.27,
+      "elapsed_s": 90.56,
       "text": "src/detector.py, tests/test_detector.py",
       "data": {
         "files": {
-          "src/detector.py": 3280,
-          "tests/test_detector.py": 3950
+          "src/detector.py": 3200,
+          "tests/test_detector.py": 4431
         }
       }
     },
     {
       "kind": "tests",
-      "elapsed_s": 89.78,
+      "elapsed_s": 93.89,
       "text": "20 passed, 0 failed",
       "data": {
         "passed": 20,
@@ -86,29 +86,29 @@
         "errors": 0,
         "ok": true,
         "summary": "20 passed, 0 failed",
-        "output": "....................                                                     [100%]\n20 passed in 0.08s\n"
+        "output": "....................                                                     [100%]\n20 passed in 0.06s\n"
       }
     },
     {
       "kind": "done",
-      "elapsed_s": 89.8,
+      "elapsed_s": 93.92,
       "text": "",
       "data": {
-        "cost_usd": 0.00921,
+        "cost_usd": 0.01534,
         "turns": 2,
-        "chars": 3354,
-        "duration_s": 89.8,
+        "chars": 3280,
+        "duration_s": 93.9,
         "evaluation": {
           "phase_id": "development",
           "passed": true,
           "missing": [],
-          "length": 3354,
+          "length": 3280,
           "reason": "20 passed, 0 failed after 2 attempt(s)"
         },
         "loop": {
           "passed": true,
           "iterations": 2,
-          "cost_usd": 0.00921,
+          "cost_usd": 0.01534,
           "attempts": [
             {
               "number": 1,
@@ -117,9 +117,9 @@
                 "tests/test_detector.py"
               ],
               "outcome": "fail",
-              "detail": "...F................                                                     [100%]\n================================== FAILURES ===================================\n_______________ test_window_dates_are_iso_not_the_input_format ________________\nchecks\\acceptance\\test_detector_contract.py:87: in test_window_dates_are_iso_not_the_input_format\n    assert result[\"window_start\"] == \"2018-11-01\", (\nE   AssertionError: window_start is ISO-8601. Only the two window dates in the result are reformatted: transactions still arrive as YYYYMMDD and everything else about reading them is unchanged.\nE   assert '20181101' == '2018-11-01'\nE     \nE     - 2018-11-01\nE     ?     -  -\nE     + 20181101\n=========================== short test summary info ===========================\nFAILED checks/acceptance/test_detector_contract.py::test_window_dates_are_iso_not_the_input_format\n1 failed, 19 passed in 0.29s\n",
-              "cost_usd": 0.00383,
-              "duration_s": 48.6
+              "detail": "...F................                                                     [100%]\n================================== FAILURES ===================================\n_______________ test_window_dates_are_iso_not_the_input_format ________________\nchecks\\acceptance\\test_detector_contract.py:87: in test_window_dates_are_iso_not_the_input_format\n    assert result[\"window_start\"] == \"2018-11-01\", (\nE   AssertionError: window_start is ISO-8601. Only the two window dates in the result are reformatted: transactions still arrive as YYYYMMDD and everything else about reading them is unchanged.\nE   assert '20181101' == '2018-11-01'\nE     \nE     - 2018-11-01\nE     ?     -  -\nE     + 20181101\n=========================== short test summary info ===========================\nFAILED checks/acceptance/test_detector_contract.py::test_window_dates_are_iso_not_the_input_format\n1 failed, 19 passed in 0.24s\n",
+              "cost_usd": 0.01001,
+              "duration_s": 55.2
             },
             {
               "number": 2,
@@ -128,9 +128,9 @@
                 "tests/test_detector.py"
               ],
               "outcome": "pass",
-              "detail": "....................                                                     [100%]\n20 passed in 0.08s\n",
-              "cost_usd": 0.00537,
-              "duration_s": 33.7
+              "detail": "....................                                                     [100%]\n20 passed in 0.06s\n",
+              "cost_usd": 0.00533,
+              "duration_s": 32.0
             }
           ]
         },
