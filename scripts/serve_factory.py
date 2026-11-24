@@ -22,7 +22,11 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from aml.build import brief as brief_module
+from aml.build import delivery_state
+from aml.build.bot import NotTheBot
 from aml.build.claude_code import BuildToolError, generate
+from aml.build.deliver import GitFailed, NotDeliverable
+from aml.build.deliver import deliver as deliver_run
 from aml.build.code import run_tests
 from aml.build.live import (
     LiveError,
@@ -147,6 +151,20 @@ def upstream_for(phase_id: str) -> dict[str, str]:
             path.read_text(encoding="utf-8") if path.exists() else ""
         )
     return upstream
+
+
+def live_build() -> dict | None:
+    """The implementation loop if it is running now, for the delivery rail.
+
+    The start time is read off the run ID, which was minted when the run began.
+    """
+    run = RUNS.get("development")
+    if not run or run.finished:
+        return None
+    s = run.run_id.rsplit("-", 1)[-1]
+    attempts = sum(e["kind"] == "attempt" for e in run.events)
+    return {"run_id": run.run_id, "attempt": max(attempts, 1), "max_attempts": 3,
+            "started_at": f"{s[:4]}-{s[4:6]}-{s[6:8]}T{s[9:11]}:{s[11:13]}:{s[13:15]}Z"}
 
 
 def start_run(
@@ -793,6 +811,10 @@ class Handler(BaseHTTPRequestHandler):
             self._static(UI_DIR / route.rsplit("/", 1)[-1])
             return
 
+        if route == "/api/delivery":
+            self._json(delivery_state.snapshot(live_build()))
+            return
+
         if route == "/api/state":
             current = brief_module.load()
             self._json({"connected": True, "product": current.product,
@@ -1032,6 +1054,17 @@ class Handler(BaseHTTPRequestHandler):
             )
             start_route(alert_id, policy, body.get("break_tier") or None)
             self._json({"started": alert_id, "policy": policy.label})
+            return
+
+        if route == "/api/deliver":
+            # The factory acts up to the merge gate: commit, push, open a PR.
+            try:
+                done = deliver_run(str(payload.get("task", "")))
+            except (NotDeliverable, NotTheBot, GitFailed) as exc:
+                self._json({"error": str(exc)}, 409)
+                return
+            delivery_state._cache["at"] = 0.0
+            self._json({"branch": done.branch, "commit": done.commit, "pr_url": done.pr_url})
             return
 
         if route.startswith("/api/run/"):

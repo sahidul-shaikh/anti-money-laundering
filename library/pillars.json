@@ -87,6 +87,20 @@
             "checks/acceptance/test_detector_contract.py"
           ],
           "watch_for": "The oracle is written first and withheld. That is the difference between evaluation and self-assessment."
+        },
+        {
+          "id": "delivery",
+          "n": "07",
+          "title": "Delivery",
+          "claim": "The factory delivers its own work as a pull request, and cannot merge it.",
+          "proof": "Every task runs the same chain: a human's intent, an accepted plan, the build loop, a commit carrying its provenance, a pull request opened by aml-factory-bot, CI with the attack suite as a required check, a human approval on GitHub, and the merge. Each station here is read from git, GitHub and the run records at the moment you look.",
+          "mode": "live",
+          "evidence": [
+            "tasks/",
+            "aml/build/deliver.py",
+            "aml/build/delivery_state.py"
+          ],
+          "watch_for": "There is no approve button in the console. A merge without an approving review shows as an owner override, never as a tick."
         }
       ]
     },

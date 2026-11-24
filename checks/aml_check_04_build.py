@@ -17,7 +17,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-from aml.build import bot, deliver
+from aml.build import bot, deliver, delivery_state
 from aml.build.claude_code import Generation
 from aml.build.evaluator import MIN_LENGTH, evaluate
 from aml.build.library import Library
@@ -252,6 +252,46 @@ check("a withheld code prompt states none of the withheld rules", not leaked,
 full_prompt = build_prompt(code_phase, upstream, withhold_rules=False)
 check("the full-requirements prompt still states them",
       all(f in full_prompt for f in ("YYYY-MM-DD", "ISO-8601")))
+
+print("\nthe delivery chain says what happened, including what it should not claim")
+
+
+def _pr(state: str, reviews: tuple = (), checks: str = "SUCCESS") -> dict:
+    return delivery_state.shape_pr({
+        "number": 9, "title": "T-009: sample", "url": "https://example/pull/9",
+        "author": {"login": "aml-factory-bot"}, "state": state,
+        "createdAt": "2026-11-24T10:00:00Z", "mergedAt": "2026-11-24T11:00:00Z",
+        "mergedBy": {"login": "owner"},
+        "reviews": [{"state": r, "author": {"login": "owner"}, "submittedAt": "x"} for r in reviews],
+        "statusCheckRollup": [{"name": "attack suite", "status": "COMPLETED" if checks != "RUNNING" else
+                               "IN_PROGRESS", "conclusion": None if checks == "RUNNING" else checks,
+                               "startedAt": "2026-11-24T10:01:00Z"}],
+        "commits": [{"oid": "abc1234def", "messageHeadline": "T-009: code",
+                     "authors": [{"login": "aml-factory-bot"}],
+                     "messageBody": "Task: T-009\nStage: development\nRun-Id: r1\n"
+                                    "Attempts: 2 (1: 19 passed 1 failed; 2: 20 passed)\n"
+                                    "Cost-USD: 0.0137 (reported by Claude Code)"}],
+    })
+
+
+task = {"id": "T-009", "intent_status": "accepted", "intent_author": "Owner",
+        "plan_status": "accepted"}
+states = lambda prs, **kw: {s["label"]: s["state"] for s in delivery_state.chain(task, prs, **kw)}  # noqa: E731
+check("merged without an approving review is an override, never a tick",
+      states([_pr("MERGED")])["Merged"] == "override"
+      and states([_pr("MERGED")])["Human approval"] == "override")
+check("merged with an approval is done",
+      states([_pr("MERGED", ("APPROVED",))])["Merged"] == "done")
+check("an open PR with green checks is waiting for a human",
+      states([_pr("OPEN")])["Human approval"] == "waiting")
+check("checks in progress show CI running, not waiting",
+      states([_pr("OPEN", checks="RUNNING")])["CI"] == "running"
+      and states([_pr("OPEN", checks="RUNNING")])["Human approval"] == "pending")
+check("a failing check is shown as failed", states([_pr("OPEN", checks="FAILURE")])["CI"] == "failed")
+check("a run ID without a run record is not a loop run",
+      states([_pr("OPEN")])["Build loop"] == "manual"
+      and states([_pr("OPEN")], recorded={"r1"})["Build loop"] == "done")
+check("a live loop shows as running", states([], live={"attempt": 2})["Build loop"] == "running")
 
 print(f"\n{'ALL CHECKS PASS' if not failures else 'FAILURES: ' + ', '.join(failures)}")
 sys.exit(1 if failures else 0)
