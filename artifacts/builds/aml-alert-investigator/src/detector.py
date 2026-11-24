@@ -1,53 +1,49 @@
-"""Actimize AML-STR-CCE-INN-A-D01-DST structuring detector.
+"""Actimize AML-STR structuring rule AML-STR-CCE-INN-A-D01-DST.
 
-Fires when at least `occurrences` inbound (CREDIT) transactions, each with an
-amount in the closed interval [lower_bound, upper_bound], fall within a span of
-`window_days` calendar days. The span is inclusive at both ends, so a window of
-14 days covers 14 calendar dates (first date to first date + 13 days).
+Clause mapping:
+- Bounds: a transaction qualifies when lower_bound <= amount <= upper_bound. Both ends inclusive.
+- Direction: only CREDIT transactions qualify. DEBIT transactions are ignored entirely, for the
+  trigger and for the occurrence count.
+- Window: an anchor qualifying transaction opens a window of window_days calendar days,
+  inclusive: anchor date up to anchor date + window_days - 1.
+- Trigger: the rule fires when a window holds at least `occurrences` qualifying transactions.
+- Reported window: the anchor window with the most qualifying transactions. Ties go to the
+  earliest anchor. window_end is the date of its last qualifying transaction.
+- Not fired: detected is False, occurrences is the peak count across all windows (0 if none),
+  window_start and window_end are None, refs is empty and total is 0.0.
 
-Among all windows, the one with the most qualifying transactions is reported;
-ties go to the earliest window. When the rule does not fire, the reported
-occurrences is that best count, and the window fields are None.
+Input dates are YYYYMMDD strings. window_start and window_end are returned as ISO-8601
+(YYYY-MM-DD). Refs are in date order. Transactions sharing a date keep their input order.
 """
 
-from datetime import date, datetime
-
-INPUT_DATE_FORMAT = "%Y%m%d"
-DIRECTION = "CREDIT"
+from datetime import date, datetime, timedelta
 
 
-def _qualifying(
-    transactions: list[dict], lower_bound: float, upper_bound: float
-) -> list[tuple[date, str, float]]:
-    """Return (date, ref, amount) for CREDIT rows within bounds, sorted by date.
+def _day(text: str) -> date:
+    """Parse a YYYYMMDD string."""
+    return datetime.strptime(text, "%Y%m%d").date()
 
-    The sort is stable, so transactions on the same date keep their input order.
-    """
-    rows = [
-        (datetime.strptime(str(t["date"]), INPUT_DATE_FORMAT).date(), t["ref"], float(t["amount"]))
+
+def _qualifying(transactions: list[dict], lower_bound: float, upper_bound: float) -> list[dict]:
+    """CREDIT transactions whose amount is within the inclusive bounds, in date order."""
+    hits = [
+        t
         for t in transactions
-        if t["direction"] == DIRECTION
-        and lower_bound <= float(t["amount"]) <= upper_bound
+        if t["direction"] == "CREDIT" and lower_bound <= float(t["amount"]) <= upper_bound
     ]
-    rows.sort(key=lambda row: row[0])
-    return rows
+    return sorted(hits, key=lambda t: _day(t["date"]))
 
 
-def _window_from(
-    rows: list[tuple[date, str, float]], start: int, window_days: int
-) -> list[tuple[date, str, float]]:
-    """Return the rows from `start` onward whose dates fall within the window.
-
-    A row belongs to the window when it is fewer than `window_days` days after
-    the window's first row.
-    """
-    first_date = rows[start][0]
-    members = []
-    for row in rows[start:]:
-        if (row[0] - first_date).days >= window_days:
-            break
-        members.append(row)
-    return members
+def _peak_window(hits: list[dict], window_days: int) -> list[dict]:
+    """Qualifying transactions in the anchor window with the most members."""
+    peak: list[dict] = []
+    for anchor in hits:
+        start = _day(anchor["date"])
+        end = start + timedelta(days=window_days)
+        members = [t for t in hits if start <= _day(t["date"]) < end]
+        if len(members) > len(peak):
+            peak = members
+    return peak
 
 
 def detect_structuring(
@@ -57,34 +53,25 @@ def detect_structuring(
     occurrences: int = 3,
     window_days: int = 14,
 ) -> dict:
-    """Apply the AML-STR structuring rule to a list of transactions.
+    """Apply the AML-STR structuring rule to one account's transactions.
 
-    Each transaction needs keys date (YYYYMMDD), ref, amount and direction.
-    Returns a dict with keys detected, occurrences, window_start, window_end
-    (ISO-8601 YYYY-MM-DD strings or None), refs (chronological) and total
-    (rounded to 2 dp).
+    Returns keys: detected, occurrences, window_start, window_end, refs, total.
     """
-    rows = _qualifying(transactions, lower_bound, upper_bound)
-    best = max(
-        (_window_from(rows, i, window_days) for i in range(len(rows))),
-        key=len,
-        default=[],
-    )
-    count = len(best)
-    if best and count >= occurrences:
+    window = _peak_window(_qualifying(transactions, lower_bound, upper_bound), window_days)
+    if not window or len(window) < occurrences:
         return {
-            "detected": True,
-            "occurrences": count,
-            "window_start": best[0][0].isoformat(),
-            "window_end": best[-1][0].isoformat(),
-            "refs": [ref for _, ref, _ in best],
-            "total": round(sum(amount for _, _, amount in best), 2),
+            "detected": False,
+            "occurrences": len(window),
+            "window_start": None,
+            "window_end": None,
+            "refs": [],
+            "total": 0.0,
         }
     return {
-        "detected": False,
-        "occurrences": count,
-        "window_start": None,
-        "window_end": None,
-        "refs": [],
-        "total": 0.0,
+        "detected": True,
+        "occurrences": len(window),
+        "window_start": _day(window[0]["date"]).isoformat(),
+        "window_end": _day(window[-1]["date"]).isoformat(),
+        "refs": [t["ref"] for t in window],
+        "total": round(sum(float(t["amount"]) for t in window), 2),
     }
