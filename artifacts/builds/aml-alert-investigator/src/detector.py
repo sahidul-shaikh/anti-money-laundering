@@ -1,67 +1,50 @@
-"""Actimize AML-STR structuring rule AML-STR-CCE-INN-A-D01-DST.
+"""Actimize AML-STR structuring detector, rule AML-STR-CCE-INN-A-D01-DST.
 
-Fires when at least `occurrences` CREDIT transactions, each with an amount in
-[lower_bound, upper_bound] (both inclusive), fall inside one window of
-`window_days` calendar days (both endpoints inclusive). DEBIT transactions are
-ignored. A transaction dated d and one dated d + (window_days - 1) share a
-window; d + window_days does not.
-
-Result keys:
-    detected      True when the rule fires.
-    occurrences   Qualifying transactions in the firing window. When the rule
-                  does not fire, the largest qualifying count in any window.
-    window_start  YYYY-MM-DD of the earliest qualifying item in the firing
-                  window, or None.
-    window_end    YYYY-MM-DD of the latest qualifying item in the firing
-                  window, or None.
-    refs          Refs of the qualifying transactions in the firing window,
-                  in date order (input order breaks ties), or [].
-    total         Sum of the amounts in refs, rounded to 2 dp, or 0.0.
+Implementer judgements where the contract is silent:
+- Only CREDIT transactions count (inbound structuring). DEBIT rows are ignored.
+- Amount bounds are inclusive: lower_bound <= amount <= upper_bound.
+- A window of N days spans N calendar days inclusive: start d covers d .. d + (N - 1).
+- Windows are anchored on each distinct qualifying date. The reported window has the
+  most qualifying transactions; ties go to the earliest start date.
+- Filters apply in order: direction, then bounds, then window count.
+- Input dates are YYYYMMDD. window_start and window_end are returned in ISO-8601
+  (YYYY-MM-DD), taken from the first and last qualifying transaction in the reported
+  window. Both are None when not detected.
+- occurrences is the best window count, returned whether or not the rule fires.
+- total is the sum of amounts in refs, rounded to 2 dp. It is 0.0 when not detected.
 """
 
 from datetime import date, datetime, timedelta
 
-Hit = tuple[date, str, float]
+INPUT_DATE_FORMAT = "%Y%m%d"
+OUTPUT_DATE_FORMAT = "%Y-%m-%d"
+DIRECTION = "CREDIT"
 
 
-def _qualifying(transactions: list[dict], lower_bound: float, upper_bound: float) -> list[Hit]:
-    """Credits within the bounds, sorted by date. The sort is stable."""
-    hits = [
-        (datetime.strptime(t["date"], "%Y%m%d").date(), t["ref"], t["amount"])
-        for t in transactions
-        if t["direction"] == "CREDIT" and lower_bound <= t["amount"] <= upper_bound
-    ]
-    return sorted(hits, key=lambda hit: hit[0])
+def _parse_date(text: str) -> date:
+    """Parse a YYYYMMDD string."""
+    return datetime.strptime(text, INPUT_DATE_FORMAT).date()
 
 
-def _window(hits: list[Hit], start: date, window_days: int) -> list[Hit]:
-    """Hits dated from start to start + window_days - 1, both inclusive."""
-    last = start + timedelta(days=window_days - 1)
-    return [hit for hit in hits if start <= hit[0] <= last]
+def _qualifying(transactions: list[dict], lower_bound: float, upper_bound: float) -> list[dict]:
+    """Keep CREDIT rows within the inclusive bounds, sorted by date (stable)."""
+    kept = []
+    for t in transactions:
+        amount = float(t["amount"])
+        if t["direction"] == DIRECTION and lower_bound <= amount <= upper_bound:
+            kept.append({"date": _parse_date(t["date"]), "ref": t["ref"], "amount": amount})
+    return sorted(kept, key=lambda t: t["date"])
 
 
-def _fired(group: list[Hit]) -> dict:
-    """Result for a firing window. group is sorted by date."""
-    return {
-        "detected": True,
-        "occurrences": len(group),
-        "window_start": group[0][0].isoformat(),
-        "window_end": group[-1][0].isoformat(),
-        "refs": [ref for _, ref, _ in group],
-        "total": round(float(sum(amount for _, _, amount in group)), 2),
-    }
-
-
-def _not_fired(occurrences: int) -> dict:
-    """Result when no window reaches the occurrence threshold."""
-    return {
-        "detected": False,
-        "occurrences": occurrences,
-        "window_start": None,
-        "window_end": None,
-        "refs": [],
-        "total": 0.0,
-    }
+def _best_window(items: list[dict], window_days: int) -> list[dict]:
+    """Largest group of items dated within [start, start + window_days - 1]."""
+    best: list[dict] = []
+    for start in sorted({t["date"] for t in items}):
+        last = start + timedelta(days=window_days - 1)
+        group = [t for t in items if start <= t["date"] <= last]
+        if len(group) > len(best):
+            best = group
+    return best
 
 
 def detect_structuring(
@@ -71,17 +54,27 @@ def detect_structuring(
     occurrences: int = 3,
     window_days: int = 14,
 ) -> dict:
-    """Evaluate AML-STR structuring over a list of transactions.
+    """Detect structured CREDIT transactions within a rolling window.
 
-    Each transaction has date (YYYYMMDD), ref, amount and direction (CREDIT or
-    DEBIT). The earliest window that meets the threshold is reported.
+    Returns keys: detected, occurrences, window_start, window_end, refs, total.
+    Window dates are ISO-8601 (YYYY-MM-DD).
     """
-    hits = _qualifying(transactions, lower_bound, upper_bound)
-    best: list[Hit] = []
-    for start, _, _ in hits:
-        group = _window(hits, start, window_days)
-        if len(group) >= occurrences:
-            return _fired(group)
-        if len(group) > len(best):
-            best = group
-    return _not_fired(len(best))
+    best = _best_window(_qualifying(transactions, lower_bound, upper_bound), window_days)
+    count = len(best)
+    if not best or count < occurrences:
+        return {
+            "detected": False,
+            "occurrences": count,
+            "window_start": None,
+            "window_end": None,
+            "refs": [],
+            "total": 0.0,
+        }
+    return {
+        "detected": True,
+        "occurrences": count,
+        "window_start": best[0]["date"].strftime(OUTPUT_DATE_FORMAT),
+        "window_end": best[-1]["date"].strftime(OUTPUT_DATE_FORMAT),
+        "refs": [t["ref"] for t in best],
+        "total": round(sum(t["amount"] for t in best), 2),
+    }
