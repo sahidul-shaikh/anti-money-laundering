@@ -1,75 +1,26 @@
-"""Actimize AML-STR-CCE-INN-A-D01-DST: structuring detector.
+"""Structuring detector for Actimize AML-STR rule AML-STR-CCE-INN-A-D01-DST.
 
-Judgements where the requirement is silent:
-- Qualifying: direction == "credit" (case-insensitive) and lower_bound <= amount <= upper_bound.
-  Both bounds are inclusive.
-- Window: a window anchored on day D covers D through D + window_days - 1. Inclusive, so
-  14 days span 14 calendar days.
-- Fires when some window holds at least `occurrences` qualifying transactions. The earliest
-  firing window is reported.
-- window_start and window_end are the ISO-8601 dates (YYYY-MM-DD) of the first and last
-  qualifying transactions in the reported window, not the nominal window edges. Transaction
-  dates remain YYYYMMDD on input.
-- refs: qualifying transactions in the reported window, ordered by date. Equal dates keep input order.
-- total: sum of their amounts, rounded to 2 dp once, at the end.
-- occurrences: qualifying count in the reported window. When not detected, the peak count in any window.
-- Not detected: window_start and window_end are None, refs is [], total is 0.0.
+A transaction qualifies when it is a CREDIT and its amount lies in
+[lower_bound, upper_bound], both bounds inclusive. The rule fires on the first
+window of window_days calendar days (both endpoints inclusive) that holds at
+least `occurrences` qualifying transactions. Windows start at each qualifying
+transaction in date order.
+
+Input dates are YYYYMMDD. window_start and window_end are YYYY-MM-DD.
+
+When the rule does not fire, occurrences is the largest number of qualifying
+transactions in any single window (0 if none qualify) and the window fields are
+None.
 """
 
 from datetime import date, datetime, timedelta
-
-QUALIFYING_DIRECTION = "credit"
-
-
-def _day(txn: dict) -> date:
-    """Parse the YYYYMMDD date of a transaction."""
-    return datetime.strptime(str(txn["date"]), "%Y%m%d").date()
+from typing import NamedTuple
 
 
-def _qualifies(txn: dict, lower_bound: float, upper_bound: float) -> bool:
-    """True when the transaction is in the counted direction and inside the amount bounds."""
-    return (
-        str(txn["direction"]).lower() == QUALIFYING_DIRECTION
-        and lower_bound <= txn["amount"] <= upper_bound
-    )
-
-
-def _window_from(hits: list[dict], start: int, window_days: int) -> list[dict]:
-    """Qualifying transactions from hits[start] onward that fall within window_days of it.
-
-    hits must be sorted by date.
-    """
-    last = _day(hits[start]) + timedelta(days=window_days - 1)
-    members = []
-    for txn in hits[start:]:
-        if _day(txn) > last:
-            break
-        members.append(txn)
-    return members
-
-
-def _detected(members: list[dict]) -> dict:
-    """Result for a firing window."""
-    return {
-        "detected": True,
-        "occurrences": len(members),
-        "window_start": _day(members[0]).isoformat(),
-        "window_end": _day(members[-1]).isoformat(),
-        "refs": [t["ref"] for t in members],
-        "total": round(sum(t["amount"] for t in members), 2),
-    }
-
-
-def _not_detected(peak_count: int) -> dict:
-    """Result when no window reaches the occurrence count."""
-    return {
-        "detected": False,
-        "occurrences": peak_count,
-        "window_start": None,
-        "window_end": None,
-        "refs": [],
-        "total": 0.0,
-    }
+class _Txn(NamedTuple):
+    day: date
+    ref: str
+    amount: float
 
 
 def detect_structuring(
@@ -79,15 +30,53 @@ def detect_structuring(
     occurrences: int = 3,
     window_days: int = 14,
 ) -> dict:
-    """Detect repeated just-below-threshold credits within a rolling window."""
-    hits = sorted(
-        (t for t in transactions if _qualifies(t, lower_bound, upper_bound)),
-        key=_day,
-    )
-    peak = 0
-    for start in range(len(hits)):
-        members = _window_from(hits, start, window_days)
-        if len(members) >= occurrences:
-            return _detected(members)
-        peak = max(peak, len(members))
-    return _not_detected(peak)
+    """Return the structuring detection result for one alert's transactions.
+
+    Keys: detected, occurrences, window_start, window_end, refs, total.
+    """
+    qualifying = _qualifying(transactions, lower_bound, upper_bound)
+    windows = [_window(qualifying, i, window_days) for i in range(len(qualifying))]
+    for window in windows:
+        if len(window) >= occurrences:
+            return _detected(window)
+    return _not_detected(max((len(w) for w in windows), default=0))
+
+
+def _qualifying(transactions: list[dict], lower: float, upper: float) -> list[_Txn]:
+    """Credits with amount in [lower, upper], in date order (stable for equal dates)."""
+    txns = [
+        _Txn(datetime.strptime(t["date"], "%Y%m%d").date(), t["ref"], t["amount"])
+        for t in transactions
+        if t["direction"] == "CREDIT" and lower <= t["amount"] <= upper
+    ]
+    return sorted(txns, key=lambda t: t.day)
+
+
+def _window(qualifying: list[_Txn], start_index: int, window_days: int) -> list[_Txn]:
+    """Qualifying transactions from start_index whose date falls within window_days of its first day, inclusive."""
+    last_day = qualifying[start_index].day + timedelta(days=window_days - 1)
+    return [t for t in qualifying[start_index:] if t.day <= last_day]
+
+
+def _detected(window: list[_Txn]) -> dict:
+    """Result for a window that reached the occurrence threshold."""
+    return {
+        "detected": True,
+        "occurrences": len(window),
+        "window_start": window[0].day.isoformat(),
+        "window_end": window[-1].day.isoformat(),
+        "refs": [t.ref for t in window],
+        "total": round(float(sum(t.amount for t in window)), 2),
+    }
+
+
+def _not_detected(peak: int) -> dict:
+    """Result when no window reached the occurrence threshold; peak is the largest window count."""
+    return {
+        "detected": False,
+        "occurrences": peak,
+        "window_start": None,
+        "window_end": None,
+        "refs": [],
+        "total": 0.0,
+    }
