@@ -307,12 +307,25 @@ check("a refused run shows as failed, with nothing to deliver",
       states([], cycle_start="x", fresh={**fresh_run, "passed": False})["Build loop"] == "failed")
 check("the newest run is older than the last PR: no new cycle",
       delivery_state.cycle([{"createdAt": "2026-11-24T13:00:00Z"}], None, fresh_run) == ("", None))
-for task, accepted in (("T-001", False), ("T-006", True)):
+for task_id, accepted in (("T-001", False), ("T-006", True)):
     try:
-        deliver.check_task(task)
-        check(f"{task} {'accepts' if accepted else 'refuses'} factory deliveries", accepted)
+        deliver.check_task(task_id)
+        check(f"{task_id} {'accepts' if accepted else 'refuses'} factory deliveries", accepted)
     except deliver.NotDeliverable:
-        check(f"{task} {'accepts' if accepted else 'refuses'} factory deliveries", not accepted)
+        check(f"{task_id} {'accepts' if accepted else 'refuses'} factory deliveries", not accepted)
+
+print("\na delivery under way is shown step by step")
+underway = {"task": "T-009", "started_at": "2026-11-24T12:05:00Z", "commit": "abc1234def", "error": ""}
+shown = lambda step, **kw: states([], cycle_start="x", fresh=fresh_run,  # noqa: E731
+                                  delivering={**underway, "step": step, **kw})
+check("committing: Commit runs, Pull request waits",
+      shown("commit")["Commit"] == "running" and shown("commit")["Pull request"] == "pending")
+check("opening the PR: Commit done, Pull request runs",
+      shown("pr")["Commit"] == "done" and shown("pr")["Pull request"] == "running")
+check("a refused delivery shows on Commit, not silently",
+      shown("refused", error="already delivered")["Commit"] == "failed")
+check("once the PR exists, it wins over the delivery record",
+      states([_pr("OPEN")], delivering={**underway, "step": "pr"})["Pull request"] == "done")
 
 print(f"\n{'ALL CHECKS PASS' if not failures else 'FAILURES: ' + ', '.join(failures)}")
 sys.exit(1 if failures else 0)

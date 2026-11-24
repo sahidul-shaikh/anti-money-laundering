@@ -323,8 +323,9 @@
     api("/api/run/development", {
       method: "POST",
       body: JSON.stringify({ focus: true, model, withhold_rules: withheld }),
-    }).then((started) => {
+    }).then(async (started) => {
       if (!started.ok) { say(host, "could not start the stage", "crit"); return; }
+      const deliverTo = (await started.json()).deliver_to;
 
       const source = new EventSource("/api/stream/development");
       source.onmessage = (message) => {
@@ -371,7 +372,8 @@
               &mdash; which the model never sees</span></div>`;
           say(host, v.passed
             ? "the loop closed: the contract is satisfied"
-            : "the gate refused it", v.passed ? "good" : "crit");
+              + (deliverTo ? ` - delivering to ${deliverTo} as a pull request, watch the rail` : "")
+            : "the gate refused it - nothing is delivered", v.passed ? "good" : "crit");
         }
       };
       source.onerror = () => source.close();

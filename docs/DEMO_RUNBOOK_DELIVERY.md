@@ -54,6 +54,12 @@ bot). You approve on GitHub during the demo.
 
 ## 2. The demonstration (about 8 minutes)
 
+### Beat 0 - Home (30 s)
+
+Open **<http://localhost:8765>**: the home screen, with the four pillars
+around the factory. Pick **T-006** in the rail's selector (top right) so the
+rail follows the demonstration task. Click **AI builds AI**.
+
 ### Beat 1 - The intent (30 s)
 
 Open `tasks/T-006/intent.md` in the editor or on GitHub.
@@ -86,20 +92,25 @@ then 20 of 20.
 working - nothing is delivered. Run it again, or show the recorded card at the
 bottom of the Loops panel, which is a real fail-then-pass run.
 
-### Beat 3 - Deliver (under a minute)
+### Beat 3 - Deliver (automatic, about 50 s)
 
-**07 Delivery → Deliver a passing run.** Choose **T-006** (there is no
-default, deliberately), press **deliver latest passing run**.
+Nothing to press. As soon as the loop passes, the factory delivers it to
+T-006 - the only task whose intent accepts factory deliveries. Watch the rail:
 
-The status line reads "committing, scanning for real data, pushing, opening
-the PR", then a link to the new pull request.
+| Rail | Measured |
+|---|---|
+| **Commit** pulses: "committing, scanning for real data, pushing" | about 40 s |
+| **Pull request** pulses: "opening the pull request" | about 8 s |
+| Both green, with the PR number | |
 
 > The factory has its own GitHub identity, aml-factory-bot. It just committed
 > the code with the run's provenance in the commit, checked nothing real had
 > leaked into it, pushed a branch and opened a pull request. It cannot do the
 > next step.
 
-Rail: **Commit** and **Pull request** turn green.
+If the loop refused, nothing is delivered and the rail says so. If a
+delivery itself is refused (shown in red on Commit, with the reason),
+**07 Delivery → deliver latest passing run** retries it by hand.
 
 Open the PR. Point at:
 - **Author: aml-factory-bot.**
@@ -174,9 +185,11 @@ measured" rather than guessing.
 
 | Symptom | Cause | Do |
 |---|---|---|
-| Deliver says "refused: ... did not pass" | The latest run was refused | Run the loop again |
-| "refused: no run record" | Run predates per-run records | Run the loop again |
-| "refused: ... already exists" | That run was delivered already | Run the loop again for a new run |
+| Rail: Build loop red, "refused, nothing to deliver" | The loop failed three attempts (seen live, 1 run in 4) | Run the loop again |
+| Rail: Commit red, "delivery refused: ..." | Read the reason on the rail | Fix it, then **07 Delivery → deliver** to retry |
+| "... was already delivered as ..." | That run already has a PR | Run the loop again for a new run |
+| "does not accept factory deliveries" | Wrong task chosen | Use T-006 |
+| Rail stays on the wrong task | Rail selector | Pick T-006 in the rail's selector |
 | "token belongs to ..., not aml-factory-bot" | Wrong or missing token | Replace `%USERPROFILE%\.aml-factory-bot\token.txt` |
 | Rail says "Delivery state unavailable" | `gh` not logged in or offline | `gh auth status` |
 | A panel shows "Not wired yet" | Fixed in T-005; an old server | Restart from the folder above |
