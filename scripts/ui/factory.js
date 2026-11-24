@@ -216,6 +216,9 @@ window.Factory = (function () {
     route();
   }
 
-  boot();
+  // Panels register from scripts loaded after this one. Booting before they
+  // have all run let a slow script lose the race, and the first route showed
+  // "Not wired yet". DOMContentLoaded fires only after every script has run.
+  document.addEventListener("DOMContentLoaded", boot);
   return { api, esc, el, register, state, go };
 })();
