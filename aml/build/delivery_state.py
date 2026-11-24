@@ -113,20 +113,34 @@ def loop_station(commits: list[dict], live: dict | None, recorded: set[str]) -> 
 
 
 def chain(task: dict, prs: list[dict], live: dict | None = None,
-          recorded: set[str] = frozenset()) -> list[dict]:
+          recorded: set[str] = frozenset(), cycle_start: str = "",
+          fresh: dict | None = None) -> list[dict]:
     """The eight stations for one task. `prs` are the task's PRs, oldest first;
-    `recorded` is the run IDs that have a run record on disk."""
+    `recorded` is the run IDs that have a run record on disk.
+
+    A repeatable task (T-006) runs many cycles. `cycle_start` is when the
+    current one began - a live run, or a run newer than the task's last PR -
+    and PRs from earlier cycles are not shown as this cycle's progress.
+    `fresh` is that newer run's record summary, while it is not yet delivered.
+    """
+    if cycle_start:
+        prs = [p for p in prs if p["createdAt"] >= cycle_start]
     pr = next((p for p in reversed(prs) if p["state"] == "OPEN"), prs[-1] if prs else None)
     commits = [c for p in prs for c in p["commits"] if c["trailers"].get("Task") == task["id"]]
     code = [c for c in commits if c["trailers"].get("Stage") not in (None, "plan")]
     ci = ci_station(pr)
     approval = approval_station(pr, ci)
+    loop = loop_station(code, live, recorded)
+    if fresh and loop["state"] in ("pending", "manual"):
+        loop = station("done" if fresh["passed"] else "failed", "Build loop",
+                       f"{fresh['run_id']} - attempts {fresh['attempts']} - ${fresh['cost']}"
+                       + ("" if fresh["passed"] else " - refused, nothing to deliver"))
     return [
         station("done" if task["intent_status"] == "accepted" else "waiting", "Intent",
                 f"{task['intent_author']} - {task['intent_status']}"),
         station("done" if task["plan_status"].startswith("accepted") else
                 "waiting" if task["plan_status"] else "pending", "Plan", task["plan_status"]),
-        loop_station(code, live, recorded),
+        loop,
         station("done", "Commit", f"{code[-1]['oid'][:7]} by {code[-1]['author']}")
         if code else station("pending", "Commit"),
         station("done", "Pull request", f"#{pr['number']} by {pr['author']['login']}", pr["url"],
@@ -161,14 +175,39 @@ def read_tasks() -> list[dict]:
         intent = folder / "intent.md"
         head = intent.read_text(encoding="utf-8").splitlines()[0] if intent.exists() else ""
         author = re.search(r"Author: ([^.]+)\.", intent.read_text(encoding="utf-8")) if intent.exists() else None
+        text = intent.read_text(encoding="utf-8") if intent.exists() else ""
         tasks.append({
             "id": folder.name,
             "title": head.split(":", 1)[-1].strip(),
             "intent_status": _status(intent),
             "intent_author": author.group(1) if author else "",
             "plan_status": _status(folder / "plan.md"),
+            # Only a task that says so accepts the build loop's output.
+            "deliverable": bool(re.search(r"^Delivery: factory\b", text, re.M)),
         })
     return tasks
+
+
+def started_at(run_id: str) -> str:
+    """The UTC start time a run ID was minted with, as ISO-8601."""
+    s = run_id.rsplit("-", 1)[-1]
+    return f"{s[:4]}-{s[4:6]}-{s[6:8]}T{s[9:11]}:{s[11:13]}:{s[13:15]}Z"
+
+
+def latest_build_run() -> dict | None:
+    """The newest implementation-loop run record, summarised."""
+    records = sorted(RUNS_DIR.glob("development-*.json"))
+    if not records:
+        return None
+    run = json.loads(records[-1].read_text(encoding="utf-8"))
+    done = next((e["data"] for e in run["events"] if e["kind"] == "done"), {})
+    loop = done.get("loop", {})
+    tests = [e["data"] for e in run["events"] if e["kind"] == "tests"]
+    parts = [f"{n}: {t['passed']} passed" + (f" {t['failed']} failed" if t["failed"] else "")
+             for n, t in enumerate(tests, 1)]
+    return {"run_id": run["run_id"], "passed": bool(loop.get("passed")),
+            "attempts": f"{len(tests)} ({'; '.join(parts)})", "cost": loop.get("cost_usd", 0),
+            "started_at": started_at(run["run_id"])}
 
 
 def read_prs() -> list[dict]:
@@ -184,8 +223,29 @@ def read_prs() -> list[dict]:
     return _cache["prs"]
 
 
-def snapshot(live: dict | None = None) -> dict:
-    """Every task's chain, the focus task, and PRs that belong to no task."""
+def default_focus(tasks: list[dict], by_task: dict[str, list[dict]]) -> str | None:
+    """Newest task with an open PR, else newest with nothing merged, else the newest."""
+    with_open = [t for t in tasks if any(p["state"] == "OPEN" for p in by_task.get(t["id"], []))]
+    unmerged = [t for t in tasks if not any(p["state"] == "MERGED" for p in by_task.get(t["id"], []))]
+    return (with_open or unmerged or tasks or [{"id": None}])[-1]["id"]
+
+
+def cycle(prs: list[dict], live: dict | None, run: dict | None) -> tuple[str, dict | None]:
+    """When the focus task's current cycle began, and its undelivered run, if any."""
+    if live:
+        return live["started_at"], None
+    last_pr = max((p["createdAt"] for p in prs), default="")
+    if run and run["started_at"] > last_pr:
+        return run["started_at"], run
+    return "", None
+
+
+def snapshot(live: dict | None = None, focus: str | None = None) -> dict:
+    """Every task's chain, the focus task, and PRs that belong to no task.
+
+    `focus` is the task the presenter chose; the live run and any undelivered
+    run are shown against it, and against no other task.
+    """
     tasks = read_tasks()
     prs = read_prs()
     by_task: dict[str, list[dict]] = {}
@@ -194,15 +254,23 @@ def snapshot(live: dict | None = None) -> dict:
         m = TASK_TITLE.match(pr["title"])
         (by_task.setdefault(m.group(1), []) if m else unmatched).append(pr)
     recorded = {p.stem for p in RUNS_DIR.glob("*.json")}
-    open_tasks = [t for t in tasks if not any(p["state"] == "MERGED" for p in by_task.get(t["id"], []))]
-    focus = (open_tasks or tasks or [{"id": None}])[-1]["id"]
+    if focus not in {t["id"] for t in tasks}:
+        focus = default_focus(tasks, by_task)
+    # A build run can only belong to a task that accepts factory deliveries.
+    takes_runs = any(t["id"] == focus and t["deliverable"] for t in tasks)
+    start, fresh = cycle(by_task.get(focus, []), live, latest_build_run()) if takes_runs else ("", None)
+
+    def task_chain(t: dict) -> list[dict]:
+        if t["id"] != focus or not takes_runs:
+            return chain(t, by_task.get(t["id"], []), recorded=recorded)
+        return chain(t, by_task.get(t["id"], []), live, recorded, start, fresh)
+
     return {
         "focus": focus,
         "tasks": [{**t, "prs": [{"number": p["number"], "url": p["url"], "state": p["state"],
                                  "author": p["author"]["login"], "title": p["title"],
                                  "commits": p["commits"]} for p in by_task.get(t["id"], [])],
-                   "chain": chain(t, by_task.get(t["id"], []),
-                                  live if t["id"] == focus else None, recorded)}
+                   "chain": task_chain(t)}
                   for t in tasks],
         "unmatched": [{"number": p["number"], "title": p["title"], "url": p["url"], "state": p["state"]}
                       for p in unmatched],

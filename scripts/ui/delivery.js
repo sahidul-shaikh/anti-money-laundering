@@ -36,8 +36,9 @@
     const all = s.tasks.flatMap((t) => t.prs);
     const merged = s.tasks.flatMap((t) => t.chain.filter((c) => c.label === "Merged"));
     // No default: delivering under the wrong task would put a false record in git.
+    // Only tasks whose intent says "Delivery: factory" accept the loop's output.
     const select = `<option value="">choose the task this run belongs to</option>`
-      + s.tasks.filter((t) => t.intent_status === "accepted")
+      + s.tasks.filter((t) => t.intent_status === "accepted" && t.deliverable)
         .map((t) => `<option value="${esc(t.id)}">${esc(t.id)} - ${esc(t.title)}</option>`).join("");
     host.querySelector("#dv-kpis").innerHTML =
       kpi(s.tasks.length, "tasks")
@@ -70,6 +71,7 @@
     host.querySelector("#dv-task").addEventListener("change", (e) => {
       e.target.dataset.touched = "1";
       host.querySelector("#dv-go").disabled = !e.target.value;
+      if (e.target.value) R.setFocus(e.target.value);
     });
     host.querySelector("#dv-go").addEventListener("click", async () => {
       const status = host.querySelector("#dv-status");

@@ -11,6 +11,7 @@ person's own checkout is never switched or touched.
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -49,6 +50,20 @@ def load_run(phase: str) -> dict:
 
 def done_event(run: dict) -> dict:
     return next((e["data"] for e in run["events"] if e["kind"] == "done"), {})
+
+
+def check_task(task: str) -> None:
+    """Refuse a task that does not accept the build loop's output.
+
+    The loop always produces the structuring detector. Filing it under a task
+    whose intent asked for something else puts a false record in git.
+    """
+    intent = ROOT / "tasks" / task / "intent.md"
+    if not intent.exists():
+        raise NotDeliverable(f"no intent for {task} at tasks/{task}/intent.md")
+    if not re.search(r"^Delivery: factory\b", intent.read_text(encoding="utf-8"), re.M):
+        raise NotDeliverable(f"{task} does not accept factory deliveries "
+                             "(its intent has no 'Delivery: factory' line)")
 
 
 def check_deliverable(run: dict) -> None:
@@ -129,14 +144,16 @@ def _pr_body(run: dict, task: str) -> str:
 
 def deliver(task: str, phase: str = "development") -> Delivery:
     """Commit, push and open a PR for the latest passing run of a phase."""
-    if not (ROOT / "tasks" / task / "intent.md").exists():
-        raise NotDeliverable(f"no intent for {task} at tasks/{task}/intent.md")
+    check_task(task)
     run = load_run(phase)
     check_deliverable(run)
     secret = bot.verified_token()
     branch = f"factory/{task.lower()}-{run['run_id']}"
-    if _git(["ls-remote", "--heads", "origin", branch], ROOT):
-        raise NotDeliverable(f"{branch} already exists; this run was delivered")
+    # A run is delivered once, under one task; its branch is the record of that.
+    heads = _git(["ls-remote", "--heads", "origin"], ROOT).splitlines()
+    earlier = [h.split("refs/heads/")[-1] for h in heads if h.endswith(f"-{run['run_id']}")]
+    if earlier:
+        raise NotDeliverable(f"run {run['run_id']} was already delivered as {earlier[0]}")
 
     _git(["fetch", "-q", "origin", "main"], ROOT)
     workdir = Path(tempfile.mkdtemp(prefix="aml-deliver-"))

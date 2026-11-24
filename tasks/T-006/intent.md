@@ -2,6 +2,8 @@
 
 Author: Sahidul Shaikh. Route: a person's idea (the standing demonstration). Status: accepted.
 
+Delivery: factory
+
 ## Problem
 The structuring detector (`artifacts/builds/aml-alert-investigator/src/detector.py`)
 is the one piece of code the factory writes. To show governed delivery end to
