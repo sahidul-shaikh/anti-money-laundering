@@ -34,8 +34,12 @@ class ProductBrief:
     def to_dict(self) -> dict:
         return asdict(self)
 
-    def preamble(self) -> str:
-        """The standing instruction every phase receives."""
+    def preamble(self, include_constraints: bool = True) -> str:
+        """The standing instruction every phase receives.
+
+        `include_constraints=False` is for a code stage running with the rules
+        withheld: the constraints restate the rule semantics being withheld.
+        """
         lines = [
             "You are one specialist stage of an AI engineering factory.",
             "",
@@ -46,7 +50,7 @@ class ProductBrief:
             "",
             f"  {self.statement.strip()}",
         ]
-        if self.constraints:
+        if self.constraints and include_constraints:
             lines += ["", "CONSTRAINTS"]
             lines += [f"  - {c}" for c in self.constraints]
         if self.source_material:

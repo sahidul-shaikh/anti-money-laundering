@@ -236,5 +236,22 @@ except deliver.GitFailed as exc:
     check("a failed git command never shows the credential",
           fake not in str(exc) and encoded not in str(exc), str(exc)[:70])
 
+print("\nwithholding the rules really withholds them")
+# Phrases that state the semantics the withheld contract says it leaves out.
+WITHHELD_FACTS = ["YYYY-MM-DD", "ISO-8601", "both inclusive", "Only credits",
+                  "debits are ignored", "inclusive of both endpoints", "d+13",
+                  "both window fields are None"]
+code_phase = BY_ID["development"]
+built = deliver.ROOT / deliver.BUILD_DIR
+upstream = {d: (built / BY_ID[d].produces).read_text(encoding="utf-8")
+            for d in code_phase.depends_on if (built / BY_ID[d].produces).exists()}
+withheld_prompt = build_prompt(code_phase, upstream, withhold_rules=True)
+leaked = [f for f in WITHHELD_FACTS if f in withheld_prompt]
+check("a withheld code prompt states none of the withheld rules", not leaked,
+      ", ".join(leaked) or f"{len(WITHHELD_FACTS)} phrases absent")
+full_prompt = build_prompt(code_phase, upstream, withhold_rules=False)
+check("the full-requirements prompt still states them",
+      all(f in full_prompt for f in ("YYYY-MM-DD", "ISO-8601")))
+
 print(f"\n{'ALL CHECKS PASS' if not failures else 'FAILURES: ' + ', '.join(failures)}")
 sys.exit(1 if failures else 0)

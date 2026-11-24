@@ -49,3 +49,30 @@ needs.
 - Live runs: attempts per run, with each attempt's pass count, from the run
   records.
 - Five checks pass; CI green.
+
+## Result
+Deterministic: before the change the withheld prompt contained all 8 withheld
+phrases; after, none. The full-requirements prompt still contains them.
+
+Live, rules withheld, haiku, three runs:
+
+| Run | Attempt 1 | Attempt 2 | Attempt 3 | Outcome | Cost |
+|---|---|---|---|---|---|
+| development-20261124T053033Z | 19/20 (ISO dates) | 20/20 | - | passed | $0.01371 |
+| development-20261124T053219Z | 18/20 (ISO dates, two-credit threshold) | 19/20 (threshold) | 19/20 (threshold) | refused after 3 | $0.01878 |
+| development-20261124T053435Z | 19/20 (ISO dates) | 20/20 | - | passed | $0.00921 |
+
+Attempt 1 failed in 3 of 3 runs; 2 of 3 closed on attempt 2. Run 2 guessed
+wrong on a second withheld rule and the loop said no after three attempts, as
+designed. The brief's original measurement was the same shape (7 of 8 closed
+on attempt 2). No prompt contained a withheld fact.
+
+## Implementation notes (departures from this plan)
+- Run records are committed as evidence under `artifacts/live/runs/<run_id>.json`,
+  including the T-002 run delivered as PR #4, whose record had existed only
+  on one machine. `artifacts/live/development.run.json` now holds the third
+  run, so the Loops panel's recorded card shows a real fail-then-pass.
+- The generated detector from these runs is not committed: generated code
+  reaches main only through a factory delivery.
+- The disk-read risk did not materialise: with the prompt fixed, attempt 1
+  failed every time, so the model is not reading the hidden suite.
