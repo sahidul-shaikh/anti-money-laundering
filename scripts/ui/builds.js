@@ -264,8 +264,9 @@
              <option value="sonnet">sonnet</option></select>
            <label class="switch"><input type="checkbox" id="loop-withhold" checked>
              <span>withhold the rule detail</span></label>
-           <button class="btn primary" id="loop-run">run the implementation stage</button>
+           <button class="btn primary" id="loop-plan">draft a plan for this run</button>
          </div>
+         <div id="loop-plan-box"></div>
          <div class="status sm quiet"></div>
          <div id="loop-attempts"></div>
          <pre class="feed" id="loop-out"></pre>
@@ -274,8 +275,43 @@
 
     renderLast(host);
 
-    host.querySelector("#loop-run").addEventListener("click", () => runLoop(host));
+    host.querySelector("#loop-plan").addEventListener("click", () => draftPlan(host));
   });
+
+  /* Nothing is built without a plan a person accepted. Step 1 drafts it;
+     step 2, "accept plan", is what starts the build. */
+  async function draftPlan(host) {
+    const box = host.querySelector("#loop-plan-box");
+    const button = host.querySelector("#loop-plan");
+    const body = { model: host.querySelector("#loop-model").value,
+                   withhold_rules: host.querySelector("#loop-withhold").checked };
+    const r = await api("/api/plan", { method: "POST", body: JSON.stringify(body) });
+    if (!r.ok) { say(host, (await r.json()).error, "crit"); return; }
+    button.disabled = true;
+    box.innerHTML = "";
+    say(host, "Claude is drafting the plan for this run - nothing is built yet", "warn");
+    for (;;) {
+      await new Promise((ok) => setTimeout(ok, 2000));
+      const p = await (await api("/api/plan")).json();
+      if (p.step === "drafting") continue;
+      button.disabled = false;
+      if (p.step === "failed") { say(host, "drafting failed: " + p.error, "crit"); return; }
+      box.innerHTML = `<div class="verdict" style="margin-top:12px">
+        <div class="vrow"><span class="k">Plan for ${esc(p.task)}</span>
+          <span class="sub">drafted by ${esc(p.model)} in ${p.duration_s}s &middot;
+          $${Number(p.cost_usd).toFixed(4)}</span></div>
+        <pre class="feed" style="max-height:none">${esc(p.text)}</pre>
+        <button class="btn primary" id="loop-accept">accept plan - start the build</button>
+        <span class="sub" style="margin-left:10px">your acceptance is recorded in the
+          pull request this run delivers</span></div>`;
+      say(host, "read the plan; nothing is built until a person accepts it", "warn");
+      host.querySelector("#loop-accept").addEventListener("click", () => {
+        box.innerHTML = "";
+        runLoop(host, "/api/plan/accept", { focus: true });
+      });
+      return;
+    }
+  }
 
   async function renderLast(host) {
     const r = await (await api("/api/lastrun/development")).json();
@@ -307,7 +343,8 @@
         ${esc(done.data.evaluation.reason)}</span></p>` : ""}`;
   }
 
-  function runLoop(host) {
+  /** Start the stage through `path` (accepting a plan starts it) and stream it. */
+  function runLoop(host, path, body) {
     const out = host.querySelector("#loop-out");
     const attemptBox = host.querySelector("#loop-attempts");
     out.textContent = "";
@@ -316,14 +353,10 @@
     host.querySelector("#loop-verdict").className = "verdict";
 
     const withheld = host.querySelector("#loop-withhold").checked;
-    const model = host.querySelector("#loop-model").value;
     const rows = [];
 
     say(host, "starting Claude Code...", "warn");
-    api("/api/run/development", {
-      method: "POST",
-      body: JSON.stringify({ focus: true, model, withhold_rules: withheld }),
-    }).then(async (started) => {
+    api(path, { method: "POST", body: JSON.stringify(body) }).then(async (started) => {
       if (!started.ok) { say(host, "could not start the stage", "crit"); return; }
       const deliverTo = (await started.json()).deliver_to;
 

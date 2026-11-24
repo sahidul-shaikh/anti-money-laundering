@@ -27,6 +27,7 @@ from aml.build.bot import NotTheBot
 from aml.build.claude_code import BuildToolError, generate
 from aml.build.deliver import GitFailed, NotDeliverable
 from aml.build.deliver import deliver as deliver_run
+from aml.build.planning import plan_prompt
 from aml.build.code import run_tests
 from aml.build.live import (
     LiveError,
@@ -90,6 +91,7 @@ class Run:
 
     phase_id: str
     run_id: str = ""
+    plan: dict | None = None
     events: list[dict] = field(default_factory=list)
     listeners: list[queue.Queue] = field(default_factory=list)
     finished: bool = False
@@ -149,6 +151,42 @@ def passed(run: Run) -> bool:
     done = next((e for e in run.events if e["kind"] == "done"), None)
     return bool(done and done.get("data", {}).get("loop", {}).get("passed"))
 
+
+# The plan for the next implementation run: task, step (drafting, waiting,
+# accepted, failed), text, model, cost, who accepted it and when.
+PLAN: dict = {}
+
+
+def utc_now() -> str:
+    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+
+
+def start_plan(model: str, withhold_rules: bool) -> str:
+    """Draft a plan for the next run, in the background, for a person to accept."""
+    task = auto_task()
+    PLAN.clear()
+    PLAN.update(task=task, step="drafting", text="", model=model, withhold=withhold_rules,
+                started_at=utc_now(), cost_usd=0.0, duration_s=0.0, error="")
+    intent = (delivery_state.TASKS_DIR / task / "intent.md").read_text(encoding="utf-8")
+
+    def worker() -> None:
+        try:
+            drafted = generate(plan_prompt(intent, withhold_rules), model=model)
+        except BuildToolError as exc:
+            PLAN.update(step="failed", error=str(exc))
+            return
+        PLAN.update(step="waiting", text=drafted.text.strip(), cost_usd=drafted.cost_usd,
+                    duration_s=round(drafted.duration_ms / 1000, 1))
+
+    threading.Thread(target=worker, daemon=True).start()
+    return task
+
+
+def human_login() -> str:
+    """The GitHub login of the person at the console - never the bot's."""
+    return subprocess.run(["gh", "api", "user", "--jq", ".login"],
+                          capture_output=True, text=True, check=True).stdout.strip()
+
 ROUTE_RUNS: dict[str, Run] = {}
 PROBE_RUNS: dict[str, Run] = {}
 IMPROVE_RUNS: dict[str, Run] = {}
@@ -203,14 +241,14 @@ def live_build() -> dict | None:
 
 def start_run(
     phase_id: str, focus: bool, model: str = "sonnet",
-    withhold_rules: bool = False,
+    withhold_rules: bool = False, plan: dict | None = None,
 ) -> Run:
     phase = BY_ID[phase_id]
     artifact = BUILD_DIR / phase.produces
     LIVE_DIR.mkdir(parents=True, exist_ok=True)
 
     run_id = f"{phase_id}-{time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())}"
-    run = Run(phase_id=phase_id, run_id=run_id)
+    run = Run(phase_id=phase_id, run_id=run_id, plan=plan)
     with RUN_LOCK:
         RUNS[phase_id] = run
     if phase.kind == "code":
@@ -223,7 +261,7 @@ def start_run(
         try:
             prompt = build_prompt(
                 phase, upstream_for(phase_id), brief_module.load(),
-                withhold_rules=withhold_rules,
+                withhold_rules=withhold_rules, plan=plan["text"] if plan else "",
             )
             events = (
                 run_code_phase_live(
@@ -732,6 +770,9 @@ def save_run_summary(run: Run, model: str, withheld: bool) -> None:
         "finished_at": time.strftime("%Y-%m-%d %H:%M:%S"),
         "events": kept,
     }
+    if run.plan:
+        summary["plan"] = {k: run.plan[k] for k in
+                           ("text", "model", "cost_usd", "duration_s", "accepted_by", "accepted_at")}
     record = json.dumps(summary, indent=2)
     (LIVE_DIR / f"{run.phase_id}.run.json").write_text(record, encoding="utf-8")
     # One record per run, named by its run ID, so a delivery can carry its evidence.
@@ -860,7 +901,27 @@ class Handler(BaseHTTPRequestHandler):
 
         if route == "/api/delivery":
             focus = parse_qs(urlparse(self.path).query).get("focus", [None])[0]
-            self._json(delivery_state.snapshot(live_build(), focus, dict(DELIVERY) or None))
+            self._json(delivery_state.snapshot(live_build(), focus, dict(DELIVERY) or None,
+                                               dict(PLAN) or None))
+            return
+
+        if route == "/api/plan":
+            self._json(dict(PLAN))
+            return
+
+        if route == "/api/doc":
+            # Read-only: a task's intent or plan, or the plan drafted for this run.
+            q = parse_qs(urlparse(self.path).query)
+            task, name = q.get("task", [""])[0], q.get("name", [""])[0]
+            if name == "runplan" and PLAN.get("task") == task and PLAN.get("text"):
+                self._json({"title": f"{task} - plan for this run", "text": PLAN["text"]})
+                return
+            path = delivery_state.TASKS_DIR / task / f"{name}.md"
+            if name not in ("intent", "plan") or path.parent.parent != delivery_state.TASKS_DIR \
+                    or not path.exists():
+                self._json({"error": "no such document"}, 404)
+                return
+            self._json({"title": f"{task} - {name}.md", "text": path.read_text(encoding="utf-8")})
             return
 
         if route == "/api/state":
@@ -1102,6 +1163,31 @@ class Handler(BaseHTTPRequestHandler):
             )
             start_route(alert_id, policy, body.get("break_tier") or None)
             self._json({"started": alert_id, "policy": policy.label})
+            return
+
+        if route == "/api/plan":
+            running = RUNS.get("development")
+            if (running and not running.finished) or PLAN.get("step") == "drafting":
+                self._json({"error": "a plan or a build is already in progress"}, 409)
+                return
+            if not auto_task():
+                self._json({"error": "no task accepts factory deliveries"}, 409)
+                return
+            task = start_plan(str(payload.get("model") or "haiku"),
+                              bool(payload.get("withhold_rules")))
+            self._json({"drafting": task})
+            return
+
+        if route == "/api/plan/accept":
+            # Nothing is built without an accepted plan; the person accepting is recorded.
+            if PLAN.get("step") != "waiting":
+                self._json({"error": "there is no drafted plan waiting to be accepted"}, 409)
+                return
+            PLAN.update(step="accepted", accepted_by=human_login(), accepted_at=utc_now())
+            start_run("development", focus=bool(payload.get("focus", True)),
+                      model=PLAN["model"], withhold_rules=PLAN["withhold"], plan=dict(PLAN))
+            self._json({"started": "development", "deliver_to": PLAN["task"],
+                        "accepted_by": PLAN["accepted_by"]})
             return
 
         if route == "/api/deliver":

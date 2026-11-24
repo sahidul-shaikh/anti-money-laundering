@@ -98,7 +98,22 @@ def trailers(run: dict, task: str) -> str:
         f"Attempts: {attempts_line(run)}",
         f"Cost-USD: {loop['cost_usd']} (reported by Claude Code)",
         f"Verified-By: {ACCEPTANCE}",
-    ])
+    ] + ([f"Plan: {plan_path(run).as_posix()}",
+          f"Plan-Accepted-By: {run['plan']['accepted_by']}"] if run.get("plan") else []))
+
+
+def plan_path(run: dict) -> Path:
+    """Where the plan accepted for a run is delivered, beside its run record."""
+    return Path("artifacts/live/runs") / f"{run['run_id']}.plan.md"
+
+
+def plan_markdown(run: dict, task: str) -> str:
+    """The accepted plan as a file: what was planned, by whom, and who accepted it."""
+    p = run["plan"]
+    return (f"# Plan for run {run['run_id']} ({task})\n\n"
+            f"Drafted by: {p['model']} in {p['duration_s']} s, ${p['cost_usd']} "
+            "(reported by Claude Code)\n"
+            f"Accepted by: {p['accepted_by']} at {p['accepted_at']}\n\n{p['text']}\n")
 
 
 def record_path(run: dict) -> Path:
@@ -138,7 +153,9 @@ def _pr_body(run: dict, task: str) -> str:
         f"{rows}\n\n"
         f"Model `{run['model']}`. Total ${loop['cost_usd']}, as reported by Claude Code. "
         f"Verified by `{ACCEPTANCE}`, a suite the model never sees.\n\n"
-        "The author of this PR cannot approve or merge it. Merging requires a "
+        + (f"**Plan accepted by {run['plan']['accepted_by']}** at {run['plan']['accepted_at']} "
+           f"before the build started: `{plan_path(run).as_posix()}`.\n\n" if run.get("plan") else "")
+        + "The author of this PR cannot approve or merge it. Merging requires a "
         "human approval and both required checks."
     )
 
@@ -174,6 +191,9 @@ def deliver(task: str, phase: str = "development",
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(ROOT / relative, target)
             _git(["add", str(relative)], tree)
+        if run.get("plan"):
+            (tree / plan_path(run)).write_text(plan_markdown(run, task), encoding="utf-8")
+            _git(["add", str(plan_path(run))], tree)
         title = f"{task}: {phase} output from run {run['run_id']}"
         message = f"{title}\n\n{trailers(run, task)}\n"
         _git(["commit", "-q", "-m", message], tree, secret)
