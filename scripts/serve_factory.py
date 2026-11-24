@@ -161,10 +161,9 @@ def live_build() -> dict | None:
     run = RUNS.get("development")
     if not run or run.finished:
         return None
-    s = run.run_id.rsplit("-", 1)[-1]
     attempts = sum(e["kind"] == "attempt" for e in run.events)
     return {"run_id": run.run_id, "attempt": max(attempts, 1), "max_attempts": 3,
-            "started_at": f"{s[:4]}-{s[4:6]}-{s[6:8]}T{s[9:11]}:{s[11:13]}:{s[13:15]}Z"}
+            "started_at": delivery_state.started_at(run.run_id)}
 
 
 def start_run(
@@ -815,7 +814,8 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         if route == "/api/delivery":
-            self._json(delivery_state.snapshot(live_build()))
+            focus = parse_qs(urlparse(self.path).query).get("focus", [None])[0]
+            self._json(delivery_state.snapshot(live_build(), focus))
             return
 
         if route == "/api/state":

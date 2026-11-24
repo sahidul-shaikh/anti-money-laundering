@@ -35,11 +35,16 @@
 
   let snapshot = null;
   let timer = null;
+  let chosen = "";
+  try { chosen = localStorage.getItem("rail-task") || ""; } catch (e) { /* storage blocked */ }
 
   function paint() {
     const rail = document.getElementById("rail");
     if (!rail || !snapshot) return;
     const task = snapshot.tasks.find((t) => t.id === snapshot.focus);
+    const pick = rail.querySelector("#rail-pick");
+    pick.innerHTML = snapshot.tasks.map((t) =>
+      `<option value="${esc(t.id)}" ${t.id === snapshot.focus ? "selected" : ""}>${esc(t.id)}</option>`).join("");
     rail.querySelector(".rail-body").innerHTML = task ? `
       <a class="rail-task" href="#/builds/delivery">${esc(task.id)}
         <span>${esc(task.title)}</span></a>
@@ -47,9 +52,17 @@
       : `<p class="sub">No tasks yet.</p>`;
   }
 
+  /** Follow a task: the rail shows its chain, and a live run is shown against it. */
+  function setFocus(id) {
+    chosen = id || "";
+    try { localStorage.setItem("rail-task", chosen); } catch (e) { /* storage blocked */ }
+    refresh();
+  }
+
   async function refresh() {
     try {
-      snapshot = await (await api("/api/delivery")).json();
+      const q = chosen ? `?focus=${encodeURIComponent(chosen)}` : "";
+      snapshot = await (await api("/api/delivery" + q)).json();
       paint();
       document.dispatchEvent(new CustomEvent("delivery", { detail: snapshot }));
     } catch (e) {
@@ -66,6 +79,7 @@
     const rail = document.createElement("aside");
     rail.id = "rail";
     rail.innerHTML = `<div class="rail-head"><span>Delivery</span>
+      <select id="rail-pick" title="the task this rail follows"></select>
       <button class="link" id="rail-toggle" title="hide or show the delivery rail">hide</button></div>
       <div class="rail-body"><p class="sub">reading git and GitHub...</p></div>`;
     document.body.appendChild(rail);
@@ -75,6 +89,7 @@
       document.body.classList.toggle("rail-closed", closed);
       document.getElementById("rail-toggle").textContent = closed ? "show" : "hide";
     };
+    document.getElementById("rail-pick").addEventListener("change", (e) => setFocus(e.target.value));
     document.getElementById("rail-toggle").addEventListener("click", () => {
       closed = !closed;
       try { localStorage.setItem("rail-closed", closed ? "1" : "0"); } catch (e) { /* storage blocked */ }
@@ -87,6 +102,6 @@
     refresh();
   }
 
-  window.FactoryRail = { chainHtml, refresh, current: () => snapshot };
+  window.FactoryRail = { chainHtml, refresh, setFocus, current: () => snapshot };
   mount();
 })();

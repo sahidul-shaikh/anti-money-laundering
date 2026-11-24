@@ -294,5 +294,25 @@ check("a run ID without a run record is not a loop run",
       and states([_pr("OPEN")], recorded={"r1"})["Build loop"] == "done")
 check("a live loop shows as running", states([], live={"attempt": 2})["Build loop"] == "running")
 
+print("\na repeatable task starts a new cycle with each run, and takes only its own deliveries")
+fresh_run = {"run_id": "r2", "passed": True, "attempts": "2 (1: 19 passed 1 failed; 2: 20 passed)",
+             "cost": 0.015, "started_at": "2026-11-24T12:00:00Z"}
+merged_before = [_pr("MERGED", ("APPROVED",))]
+new_cycle = states(merged_before, cycle_start=fresh_run["started_at"], fresh=fresh_run)
+check("a run newer than the last PR shows as this cycle's build loop",
+      new_cycle["Build loop"] == "done")
+check("the previous cycle's PR is not shown as this cycle's progress",
+      new_cycle["Pull request"] == "pending" and new_cycle["Merged"] == "pending")
+check("a refused run shows as failed, with nothing to deliver",
+      states([], cycle_start="x", fresh={**fresh_run, "passed": False})["Build loop"] == "failed")
+check("the newest run is older than the last PR: no new cycle",
+      delivery_state.cycle([{"createdAt": "2026-11-24T13:00:00Z"}], None, fresh_run) == ("", None))
+for task, accepted in (("T-001", False), ("T-006", True)):
+    try:
+        deliver.check_task(task)
+        check(f"{task} {'accepts' if accepted else 'refuses'} factory deliveries", accepted)
+    except deliver.NotDeliverable:
+        check(f"{task} {'accepts' if accepted else 'refuses'} factory deliveries", not accepted)
+
 print(f"\n{'ALL CHECKS PASS' if not failures else 'FAILURES: ' + ', '.join(failures)}")
 sys.exit(1 if failures else 0)
