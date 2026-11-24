@@ -31,7 +31,7 @@ uv run python scripts/serve_factory.py
 Standard library only, binds `127.0.0.1:8765`. The landing page shows the four
 pillars; **Explore capabilities** opens the discipline grid.
 
-All 17 panels are enabled. Verified from this folder: **17 panels, 0 JavaScript
+All 18 panels are enabled. Verified from this folder: **18 panels, 0 JavaScript
 errors.**
 
 ### Routes
@@ -39,6 +39,7 @@ errors.**
 ```
 /factory#/builds/specs       /factory#/builds/context    /factory#/builds/skills
 /factory#/builds/loops       /factory#/builds/graphs     /factory#/builds/evaluation
+/factory#/builds/delivery
 /factory#/runs/routing       /factory#/runs/reliability
 /factory#/runs/observability /factory#/runs/finops
 /factory#/secures/threat-modelling  /factory#/secures/runtime-defense
@@ -117,7 +118,7 @@ Playwright is **not** in the project environment. Run it standalone:
 uv run --no-project --with playwright python your_script.py
 ```
 
-A sweep script that drives all 17 panels and reports JS errors is the fastest
+A sweep script that drives all 18 panels and reports JS errors is the fastest
 way to confirm you have not broken anything. The panel host element is
 `#dpanel`.
 

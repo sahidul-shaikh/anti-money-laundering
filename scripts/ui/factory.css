@@ -349,3 +349,64 @@ tr:last-child td { border-bottom: none }
   .pair { grid-template-columns: 1fr }
   .split .list { border-right: none; border-bottom: 1px solid var(--line) }
 }
+
+/* ---- delivery rail and chain stations --------------------------------- */
+
+body { padding-right: 270px }
+body.rail-closed { padding-right: 0 }
+#rail {
+  position: fixed; top: 64px; right: 0; bottom: 0; width: 262px; overflow-y: auto;
+  background: var(--panel); border-left: 1px solid var(--line); padding: 12px 14px 20px;
+  z-index: 20;
+}
+body.rail-closed #rail { width: auto; bottom: auto; border-bottom: 1px solid var(--line);
+  border-bottom-left-radius: 9px }
+body.rail-closed #rail .rail-body { display: none }
+.rail-head { display: flex; justify-content: space-between; align-items: center;
+  font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted);
+  gap: 14px }
+.rail-task { display: block; margin: 10px 0 12px; color: var(--ink); text-decoration: none;
+  font-weight: 600; font-family: var(--mono) }
+.rail-task span { display: block; font-family: inherit; font-weight: 400; font-size: 12.5px;
+  color: var(--muted); margin-top: 2px; font-family: system-ui, sans-serif }
+.rail-chain .st { position: relative; padding-bottom: 14px }
+.rail-chain .st:not(:last-child)::after { content: ""; position: absolute; left: 7px; top: 18px;
+  bottom: 0; width: 2px; background: var(--line) }
+.rail-chain .st-done:not(:last-child)::after { background: var(--good) }
+
+.st { display: flex; gap: 10px; align-items: flex-start }
+.st-ic { flex: 0 0 16px; width: 16px; height: 16px; border-radius: 50%;
+  border: 2px solid var(--line); margin-top: 1px; box-sizing: border-box }
+.st-body { min-width: 0 }
+.st-label { font-size: 13px; color: var(--ink) }
+.st-detail { font-size: 11.5px; color: var(--muted); overflow-wrap: anywhere; margin-top: 1px }
+.st-detail a { color: var(--acn-light) }
+.st-time { font-family: var(--mono); font-size: 11px; color: var(--acn-light); margin-left: 4px }
+.st-done .st-ic { background: var(--good); border-color: var(--good) }
+.st-running .st-ic { border-color: var(--acn-purple); animation: st-pulse 1.2s ease-in-out infinite }
+.st-waiting .st-ic { border-color: var(--warn); background: rgba(255, 176, 32, .25);
+  animation: st-pulse-warn 1.8s ease-in-out infinite }
+.st-waiting .st-label, .st-waiting .st-detail { color: var(--warn) }
+.st-failed .st-ic { background: var(--crit); border-color: var(--crit) }
+.st-failed .st-detail { color: var(--crit) }
+.st-override .st-ic, .st-manual .st-ic { border-color: var(--grey); border-style: dashed }
+.st-override .st-detail { color: var(--grey) }
+.st-pending .st-label { color: var(--muted) }
+@keyframes st-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(161, 0, 255, .7) }
+  50% { box-shadow: 0 0 0 7px rgba(161, 0, 255, 0) }
+}
+@keyframes st-pulse-warn {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 176, 32, .7) }
+  50% { box-shadow: 0 0 0 7px rgba(255, 176, 32, 0) }
+}
+@media (prefers-reduced-motion: reduce) {
+  .st-running .st-ic, .st-waiting .st-ic { animation: none }
+}
+.chain-h { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: 12px; margin-top: 12px }
+@media (max-width: 1100px) {
+  body { padding-right: 0 }
+  #rail { display: none }
+  .chain-h { grid-template-columns: repeat(4, minmax(0, 1fr)) }
+}

@@ -14,7 +14,7 @@ uv sync
 uv run python scripts/serve_factory.py     # http://localhost:8765
 ```
 
-All four pillars and all 17 panels are enabled.
+All four pillars and all 18 panels are enabled.
 
 ```bash
 for f in checks/aml_check_0*.py; do uv run python "$f"; done
