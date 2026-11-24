@@ -256,7 +256,8 @@
         "Tick the handicap and the detail is held back: the signature and the output "
         + "keys go over, but not the boundary, window and direction semantics, and "
         + "not the output conventions the downstream system expects. The acceptance "
-        + "suite knows them. The first attempt cannot, and fails every time.",
+        + "suite knows them. The first attempt has to guess, so it is expected to "
+        + "fail; the record below shows what actually happened.",
         `<div class="bar">
            <span class="sub">model</span>
            <select id="loop-model"><option value="haiku">haiku</option>
