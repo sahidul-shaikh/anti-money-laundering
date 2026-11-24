@@ -43,3 +43,28 @@ Plus `fleetTable` (`runs.js:31`), defined and never referenced.
 - Rendered text of all 17 panels identical before and after.
 - 0 JavaScript errors across the sweep.
 - Five checks pass locally; both CI checks green on the PR.
+
+## Implementation notes (departures from this plan)
+- Seven helpers were left orphaned by the deletions and removed after a
+  repeat search found no other use: `alertOptions`, `streamRoute` (runs.js),
+  `C` (secure_demo.js), `sgn`, `decisionRow`, `OUTCOME` (improves.js),
+  `CASES`, `say` (improve_demo.js).
+- No file became empty. `chat.js` now holds only the shared
+  `window.FactoryChat` helpers, which other panels use, so it stays.
+- Five file-header comments described panels no longer in those files and
+  were rewritten to say what each file now holds.
+- The first comparison was invalid: a stale server from an earlier session
+  was still answering on port 8765, so both snapshots saw the old files. It
+  was stopped, and each later snapshot first confirmed which version the
+  server was serving.
+- The second comparison differed on builds/specs. Cause, reproduced: a
+  cold-load race in `factory.js` can render the first route before later
+  scripts register their panels (main showed "Not wired yet" on 1 of 3 cold
+  loads, never after navigation). Not caused by this change and not fixed by
+  it; recorded as a separate finding. The final comparison lands on the
+  console first, then visits each panel.
+
+## Result
+main vs this branch: 17 of 17 panels render identical text, 0 JavaScript
+errors on both. Five checks pass. 558 lines of dead registrations and 193
+lines of orphaned helpers and stale comments removed.

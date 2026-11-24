@@ -1,8 +1,6 @@
-/* Discipline panels for AI improves AI.
-
-   Harness runs a real before/after on Bedrock. Tokenomics measures the system
-   prefix with two real calls. Failure mining and Value engineering read the
-   recorded evaluation. */
+/* AI improves AI - the Value engineering panel, read from the recorded
+   evaluation. Harness and Tokenomics live in panels.js; Failure mining in
+   improve_demo.js. */
 
 (function () {
   const F = window.Factory;
@@ -11,7 +9,6 @@
 
   const num = (n) => Number(n || 0).toLocaleString();
   const pct = (n) => (Number(n || 0) * 100).toFixed(1) + "%";
-  const sgn = (n, d = 2) => (n > 0 ? "+" : "") + Number(n).toFixed(d);
   const kpi = (v, l) => `<div class="kpi"><div class="v">${v}</div><div class="l">${l}</div></div>`;
   const card = (title, sub, body, id) =>
     `<div class="card"${id ? ` id="${id}"` : ""}><h3>${title}</h3>`
@@ -28,46 +25,6 @@
     if (el) { el.textContent = text; el.className = "status sm " + (tone || "quiet"); }
   };
 
-  const OUTCOME = {
-    approved: "good", refused: "crit", insufficient_evidence: "warn",
-  };
-
-  const decisionRow = (dec) => `<span class="chip ${OUTCOME[dec.outcome] || ""}">${
-    esc(dec.outcome.replace(/_/g, " "))}</span>`;
-
-  /* ================================================================= 01 */
-
-  /* ================================================================= 02 */
-
-  /* ================================================================= 03 */
-
-  register("improves", "tokenomics", async (host) => {
-    host.innerHTML = `
-      <div class="card">
-        <h3>The instructions every call carries</h3>
-        <p class="sub">The agent is sent the same block of instructions on every alert.
-        It used to spell out the detection thresholds for all six scenarios, whether or
-        not the alert was about them. They now come from the rulebook instead, one rule
-        at a time.</p>
-        <div class="bar"><button class="btn primary" id="tk-go">measure it</button></div>
-        <div class="status sm quiet"></div>
-        <div id="tk-out"></div>
-      </div>`;
-
-    host.querySelector("#tk-go").addEventListener("click", async () => {
-      status(host, "asking the model to count it...", "warn");
-      const r = await (await api("/api/improve/tokens", { method: "POST" })).json();
-      if (r.error) { status(host, r.error, "crit"); return; }
-      host.querySelector("#tk-out").innerHTML = `
-        <div class="kpis">
-          ${kpi(num(r.tokens_before), "words of instruction, before")}
-          ${kpi(num(r.tokens_now), "after")}
-          ${kpi(num(Math.abs(r.saved_over_corpus)), "saved across 70 alerts")}
-        </div>
-        <p class="sub" style="margin-top:12px">Counted by the model itself, not estimated.</p>`;
-      status(host, "measured", "good");
-    });
-  });
   /* ================================================================= 04 */
 
   register("improves", "value-engineering", async (host) => {
