@@ -85,6 +85,7 @@ class Run:
     """One live phase run, and the queues watching it."""
 
     phase_id: str
+    run_id: str = ""
     events: list[dict] = field(default_factory=list)
     listeners: list[queue.Queue] = field(default_factory=list)
     finished: bool = False
@@ -156,7 +157,8 @@ def start_run(
     artifact = BUILD_DIR / phase.produces
     LIVE_DIR.mkdir(parents=True, exist_ok=True)
 
-    run = Run(phase_id=phase_id)
+    run_id = f"{phase_id}-{time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())}"
+    run = Run(phase_id=phase_id, run_id=run_id)
     with RUN_LOCK:
         RUNS[phase_id] = run
 
@@ -662,6 +664,7 @@ def save_run_summary(run: Run, model: str, withheld: bool) -> None:
         return
     summary = {
         "phase_id": run.phase_id,
+        "run_id": run.run_id,
         "model": model,
         "rules_withheld": withheld,
         "finished_at": time.strftime("%Y-%m-%d %H:%M:%S"),

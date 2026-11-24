@@ -21,3 +21,4 @@ __pycache__/
 
 # Write-only stream logs
 artifacts/live/*.events.jsonl
+artifacts/live/*.stream.md

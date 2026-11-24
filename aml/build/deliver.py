@@ -1,0 +1,166 @@
+"""Deliver a passing build run as a pull request, as aml-factory-bot.
+
+The factory acts up to the merge gate and no further: it commits, pushes a
+branch and opens a pull request. Approval and merge stay with a human, and
+branch protection makes that a property of the repository, not a promise.
+
+Work happens in a temporary git worktree based on origin/main, so the
+person's own checkout is never switched or touched.
+"""
+
+from __future__ import annotations
+
+import json
+import shutil
+import subprocess
+import sys
+import tempfile
+from dataclasses import dataclass
+from pathlib import Path
+
+from aml.build import bot
+
+REPO = "sahidul-shaikh/anti-money-laundering"
+ROOT = Path(__file__).resolve().parents[2]
+BUILD_DIR = Path("artifacts/builds/aml-alert-investigator")
+LIVE_DIR = ROOT / "artifacts" / "live"
+ACCEPTANCE = "checks/acceptance/test_detector_contract.py"
+SCAN = ROOT / "scripts" / "check_no_real_data.py"
+
+
+class NotDeliverable(RuntimeError):
+    """The run, task or repository state does not allow delivery."""
+
+
+@dataclass(frozen=True)
+class Delivery:
+    branch: str
+    commit: str
+    pr_url: str
+
+
+def load_run(phase: str) -> dict:
+    """The recorded summary of the latest live run of a phase."""
+    path = LIVE_DIR / f"{phase}.run.json"
+    if not path.exists():
+        raise NotDeliverable(f"no recorded run for {phase}")
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def done_event(run: dict) -> dict:
+    return next((e["data"] for e in run["events"] if e["kind"] == "done"), {})
+
+
+def check_deliverable(run: dict) -> None:
+    """Refuse anything that did not pass, or cannot be traced to its run."""
+    if not run.get("run_id"):
+        raise NotDeliverable("run has no run ID (recorded before run IDs existed)")
+    if not done_event(run).get("loop", {}).get("passed"):
+        raise NotDeliverable(f"run {run['run_id']} did not pass the acceptance suite")
+
+
+def attempts_line(run: dict) -> str:
+    """Per-attempt acceptance results, in order, from the run's test events."""
+    results = [e["data"] for e in run["events"] if e["kind"] == "tests"]
+    parts = []
+    for n, r in enumerate(results, start=1):
+        failed = f" {r['failed']} failed" if r["failed"] else ""
+        parts.append(f"{n}: {r['passed']} passed{failed}")
+    return f"{len(results)} ({'; '.join(parts)})"
+
+
+def trailers(run: dict, task: str) -> str:
+    """Provenance carried by the commit, every value taken from the run record."""
+    loop = done_event(run)["loop"]
+    return "\n".join([
+        f"Task: {task}",
+        f"Stage: {run['phase_id']}",
+        f"Model: {run['model']}",
+        f"Run-Id: {run['run_id']}",
+        f"Attempts: {attempts_line(run)}",
+        f"Cost-USD: {loop['cost_usd']} (reported by Claude Code)",
+        f"Verified-By: {ACCEPTANCE}",
+    ])
+
+
+def final_files(run: dict) -> list[str]:
+    """What the passing attempt wrote, relative to the build directory."""
+    return done_event(run)["loop"]["attempts"][-1]["produced"]
+
+
+class GitFailed(RuntimeError):
+    """A git command failed; carries git's own message, never a credential."""
+
+
+def _git(args: list[str], cwd: Path, secret: str | None = None) -> str:
+    done = subprocess.run(
+        ["git", *args], cwd=cwd, capture_output=True, text=True,
+        env=bot.git_env(secret) if secret else None,
+    )
+    if done.returncode != 0:
+        raise GitFailed(f"git {' '.join(args)} failed: {(done.stderr or done.stdout).strip()[-800:]}")
+    return done.stdout.strip()
+
+
+def _pr_body(run: dict, task: str) -> str:
+    loop = done_event(run)["loop"]
+    rows = "\n".join(
+        f"| {a['number']} | {a['outcome']} | {a['duration_s']} s | ${a['cost_usd']} |"
+        for a in loop["attempts"]
+    )
+    return (
+        f"Delivered by the factory from run `{run['run_id']}` for "
+        f"[{task}](https://github.com/{REPO}/blob/main/tasks/{task}/intent.md).\n\n"
+        "| Attempt | Acceptance | Duration | Cost |\n|---|---|---|---|\n"
+        f"{rows}\n\n"
+        f"Model `{run['model']}`. Total ${loop['cost_usd']}, as reported by Claude Code. "
+        f"Verified by `{ACCEPTANCE}`, a suite the model never sees.\n\n"
+        "The author of this PR cannot approve or merge it. Merging requires a "
+        "human approval and both required checks."
+    )
+
+
+def deliver(task: str, phase: str = "development") -> Delivery:
+    """Commit, push and open a PR for the latest passing run of a phase."""
+    if not (ROOT / "tasks" / task / "intent.md").exists():
+        raise NotDeliverable(f"no intent for {task} at tasks/{task}/intent.md")
+    run = load_run(phase)
+    check_deliverable(run)
+    secret = bot.verified_token()
+    branch = f"factory/{task.lower()}-{run['run_id']}"
+    if _git(["ls-remote", "--heads", "origin", branch], ROOT):
+        raise NotDeliverable(f"{branch} already exists; this run was delivered")
+
+    _git(["fetch", "-q", "origin", "main"], ROOT)
+    workdir = Path(tempfile.mkdtemp(prefix="aml-deliver-"))
+    tree = workdir / "tree"
+    try:
+        _git(["worktree", "add", "-q", "-b", branch, str(tree), "origin/main"], ROOT)
+        for name in final_files(run):
+            source = ROOT / BUILD_DIR / name
+            target = tree / BUILD_DIR / name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(source, target)
+            _git(["add", str(BUILD_DIR / name)], tree)
+        title = f"{task}: {phase} output from run {run['run_id']}"
+        message = f"{title}\n\n{trailers(run, task)}\n"
+        _git(["commit", "-q", "-m", message], tree, secret)
+        commit = _git(["rev-parse", "HEAD"], tree)
+        scan = subprocess.run([sys.executable, str(SCAN), commit], cwd=ROOT)
+        if scan.returncode != 0:
+            raise NotDeliverable("real customer data in the delivery; nothing pushed")
+        # The primary checkout's hooks, not the base branch's copy in the worktree.
+        hooks = f"core.hooksPath={ROOT / '.githooks'}"
+        _git(["-c", hooks, "push", "-q", "-u", "origin", branch], tree, secret)
+    finally:
+        # Cleanup must never mask the failure that brought us here.
+        for args in (["worktree", "remove", "--force", str(tree)], ["branch", "-q", "-D", branch]):
+            subprocess.run(["git", *args], cwd=ROOT, capture_output=True)
+        shutil.rmtree(workdir, ignore_errors=True)
+
+    pr_url = subprocess.run(
+        ["gh", "pr", "create", "--repo", REPO, "--base", "main", "--head", branch,
+         "--title", title, "--body", _pr_body(run, task)],
+        env=bot.gh_env(secret), capture_output=True, text=True, check=True,
+    ).stdout.strip()
+    return Delivery(branch=branch, commit=commit, pr_url=pr_url)

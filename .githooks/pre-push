@@ -1,11 +1,14 @@
 #!/bin/sh
 # Refuse to push a commit that carries real customer data.
 # Enable once per clone: git config core.hooksPath .githooks
+# Always scans with the primary checkout's script and environment, so a push
+# from a linked worktree (as the factory makes) is scanned the same way.
 zero=0000000000000000000000000000000000000000
+main=$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")
 while read local_ref local_sha remote_ref remote_sha; do
     [ "$local_sha" = "$zero" ] && continue
-    uv run --no-sync python scripts/check_no_real_data.py "$local_sha" || {
-        echo "push refused: real customer data in $local_ref (see above)" >&2
+    uv run --project "$main" --no-sync python "$main/scripts/check_no_real_data.py" "$local_sha" || {
+        echo "push refused: the real-data scan blocked $local_ref or could not run (see above)" >&2
         exit 1
     }
 done
