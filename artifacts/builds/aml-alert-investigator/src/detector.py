@@ -1,67 +1,49 @@
-"""AML-STR-CCE-INN-A-D01-DST structuring detector.
+"""Actimize AML-STR-CCE-INN-A-D01-DST structuring detector.
 
-Flags a structuring pattern when at least `occurrences` inbound (CREDIT)
-transactions with amounts in [lower_bound, upper_bound], both inclusive, fall
-inside one window of `window_days` calendar days. A window spans `window_days`
-days counting first and last day, so a transaction counts only if it is fewer
-than `window_days` days after the window's first qualifying transaction.
-Input dates are YYYYMMDD; the window dates in the result are ISO-8601 (YYYY-MM-DD).
+Rule as implemented:
+1. Qualify: lower_bound <= amount <= upper_bound (both inclusive) and
+   direction == "CREDIT" (inbound). The direction filter runs before counting.
+2. Window: a window of window_days spans window_days calendar days inclusive.
+   A qualifying item dated d_j falls in the window opened by d_i when
+   (d_j - d_i).days <= window_days - 1.
+3. Count: each qualifying item opens a window; count the qualifying items inside
+   it. The reported window has the largest count; ties go to the earliest.
+4. Fire: detected when that count >= occurrences.
+
+Output: window_start and window_end are the ISO-8601 (YYYY-MM-DD) dates of the
+first and last qualifying items in the reported window, not the calendar edges
+of the window. When not detected, occurrences still carries the largest window
+count, the window dates are None, refs is empty and total is 0.0.
 """
-
-from datetime import datetime
-
-INBOUND = "CREDIT"
+from datetime import date, datetime
 
 
-def _parse_date(value: str) -> datetime:
-    """Parse a YYYYMMDD date string."""
-    return datetime.strptime(value, "%Y%m%d")
-
-
-def _iso(value: str) -> str:
-    """Reformat a YYYYMMDD date string as YYYY-MM-DD."""
-    return _parse_date(value).date().isoformat()
+def _parse_date(value: str) -> date:
+    """Parse a YYYYMMDD string."""
+    return datetime.strptime(value, "%Y%m%d").date()
 
 
 def _qualifying(transactions: list[dict], lower_bound: float, upper_bound: float) -> list[dict]:
-    """Inbound transactions with bounded amounts, sorted by date.
-
-    The sort is stable, so transactions on the same date keep input order.
-    """
+    """Return inbound transactions within the amount bounds, sorted by date (stable)."""
     hits = [
         t
         for t in transactions
-        if str(t["direction"]).upper() == INBOUND
-        and lower_bound <= float(t["amount"]) <= upper_bound
+        if t["direction"] == "CREDIT" and lower_bound <= t["amount"] <= upper_bound
     ]
-    return sorted(hits, key=lambda t: t["date"])
+    return sorted(hits, key=lambda t: _parse_date(t["date"]))
 
 
-def _window_from(hits: list[dict], start: int, window_days: int) -> list[dict]:
-    """Qualifying transactions from `start` onward within the window opened at `start`."""
-    first = _parse_date(hits[start]["date"])
-    return [t for t in hits[start:] if (_parse_date(t["date"]) - first).days < window_days]
-
-
-def _summary(detected: bool, window: list[dict]) -> dict:
-    """Result dict for a window. Window dates are the first and last qualifying transactions, as YYYY-MM-DD."""
-    if not window:
-        return {
-            "detected": detected,
-            "occurrences": 0,
-            "window_start": None,
-            "window_end": None,
-            "refs": [],
-            "total": 0.0,
-        }
-    return {
-        "detected": detected,
-        "occurrences": len(window),
-        "window_start": _iso(window[0]["date"]),
-        "window_end": _iso(window[-1]["date"]),
-        "refs": [t["ref"] for t in window],
-        "total": round(sum(float(t["amount"]) for t in window), 2),
-    }
+def _largest_window(hits: list[dict], window_days: int) -> tuple[int, int]:
+    """Return (start, end) indices of the largest window; earliest wins ties."""
+    days = [_parse_date(t["date"]) for t in hits]
+    best_start, best_end = 0, 0
+    for i, opener in enumerate(days):
+        j = i
+        while j < len(days) and (days[j] - opener).days <= window_days - 1:
+            j += 1
+        if j - i > best_end - best_start:
+            best_start, best_end = i, j
+    return best_start, best_end
 
 
 def detect_structuring(
@@ -71,17 +53,29 @@ def detect_structuring(
     occurrences: int = 3,
     window_days: int = 14,
 ) -> dict:
-    """Detect structuring in a list of transactions.
+    """Detect a run of sub-threshold inbound amounts within a rolling window.
 
-    Returns the earliest window that reaches `occurrences` qualifying transactions,
-    with its count, first and last qualifying dates (YYYY-MM-DD), refs in date order,
-    and the rounded sum of its amounts. When nothing fires, `occurrences` is the
-    largest count found in any window and the window fields are empty.
+    Returns keys: detected, occurrences, window_start, window_end, refs, total.
+    window_start and window_end are ISO-8601 (YYYY-MM-DD) strings.
     """
     hits = _qualifying(transactions, lower_bound, upper_bound)
-    windows = [_window_from(hits, i, window_days) for i in range(len(hits))]
-    fired = next((w for w in windows if len(w) >= occurrences), None)
-    if fired is not None:
-        return _summary(True, fired)
-    best = max(windows, key=len, default=[])
-    return {**_summary(False, []), "occurrences": len(best)}
+    start, end = _largest_window(hits, window_days)
+    window = hits[start:end]
+    count = len(window)
+    if count < occurrences:
+        return {
+            "detected": False,
+            "occurrences": count,
+            "window_start": None,
+            "window_end": None,
+            "refs": [],
+            "total": 0.0,
+        }
+    return {
+        "detected": True,
+        "occurrences": count,
+        "window_start": _parse_date(window[0]["date"]).isoformat(),
+        "window_end": _parse_date(window[-1]["date"]).isoformat(),
+        "refs": [t["ref"] for t in window],
+        "total": round(sum(t["amount"] for t in window), 2),
+    }
