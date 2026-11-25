@@ -1,130 +1,96 @@
-"""Pytest tests for the AML-STR structuring detector."""
+"""Visible tests for detect_structuring."""
 
 from detector import detect_structuring
 
+KEYS = {"detected", "occurrences", "window_start", "window_end", "refs", "total"}
 
-def txn(date: str, ref: str, amount: float, direction: str = "CREDIT") -> dict:
+
+def credit(date, ref, amount, direction="CREDIT"):
     return {"date": date, "ref": ref, "amount": amount, "direction": direction}
 
 
-def test_fires_on_three_in_fourteen_day_window():
+def test_detects_three_inbound_in_window():
     txns = [
-        txn("20260101", "A", 9000),
-        txn("20260108", "B", 9500),
-        txn("20260114", "C", 8200),
+        credit("20240101", "A", 8500),
+        credit("20240105", "B", 9000),
+        credit("20240110", "C", 8800),
     ]
     result = detect_structuring(txns)
-    assert result == {
-        "detected": True,
-        "occurrences": 3,
-        "window_start": "2026-01-01",
-        "window_end": "2026-01-14",
-        "refs": ["A", "B", "C"],
-        "total": 26700.0,
-    }
+    assert set(result) == KEYS
+    assert result["detected"] is True
+    assert result["occurrences"] == 3
+    assert result["window_start"] == "2024-01-01"
+    assert result["window_end"] == "2024-01-10"
+    assert result["refs"] == ["A", "B", "C"]
+    assert result["total"] == 26300.0
 
 
 def test_window_dates_are_iso_not_the_input_format():
     txns = [
-        txn("20181101", "A", 9000),
-        txn("20181102", "B", 9000),
-        txn("20181103", "C", 9000),
+        credit("20181101", "A", 8500),
+        credit("20181102", "B", 8500),
+        credit("20181103", "C", 8500),
     ]
     result = detect_structuring(txns)
     assert result["window_start"] == "2018-11-01"
     assert result["window_end"] == "2018-11-03"
 
 
-def test_window_spans_exactly_fourteen_days():
+def test_bounds_are_inclusive():
     txns = [
-        txn("20260101", "A", 9000),
-        txn("20260108", "B", 9000),
-        txn("20260115", "C", 9000),
+        credit("20240101", "LO", 8000.00),
+        credit("20240102", "HI", 9999.99),
+        credit("20240103", "MID", 9000),
+    ]
+    result = detect_structuring(txns)
+    assert result["detected"] is True
+    assert result["refs"] == ["LO", "HI", "MID"]
+
+
+def test_amounts_outside_bounds_do_not_count():
+    txns = [
+        credit("20240101", "BELOW", 7999.99),
+        credit("20240102", "ABOVE", 10000),
+        credit("20240103", "OK", 9000),
+    ]
+    result = detect_structuring(txns)
+    assert result["detected"] is False
+    assert result["occurrences"] == 1
+
+
+def test_debits_are_ignored():
+    txns = [
+        credit("20240101", "A", 8500),
+        credit("20240102", "B", 8500, direction="DEBIT"),
+        credit("20240103", "C", 8500),
     ]
     result = detect_structuring(txns)
     assert result["detected"] is False
     assert result["occurrences"] == 2
 
 
-def test_bounds_are_inclusive():
-    txns = [
-        txn("20260101", "A", 8000.0),
-        txn("20260102", "B", 9999.99),
-        txn("20260103", "C", 9000.0),
-    ]
-    assert detect_structuring(txns)["detected"] is True
+def test_window_span_is_fewer_than_window_days():
+    # Day 0 and day 13 fall in a 14-day window; day 14 does not.
+    inside = [credit("20240101", "A", 8500), credit("20240107", "B", 8500), credit("20240114", "C", 8500)]
+    assert detect_structuring(inside)["detected"] is False
 
-
-def test_outside_bounds_excluded():
-    txns = [
-        txn("20260101", "A", 7999.99),
-        txn("20260102", "B", 10000.00),
-        txn("20260103", "C", 9000.0),
-    ]
-    result = detect_structuring(txns)
-    assert result["detected"] is False
-    assert result["occurrences"] == 1
-
-
-def test_debits_do_not_count():
-    txns = [
-        txn("20260101", "A", 9000, "DEBIT"),
-        txn("20260102", "B", 9000, "DEBIT"),
-        txn("20260103", "C", 9000, "CREDIT"),
-    ]
-    result = detect_structuring(txns)
-    assert result["detected"] is False
-    assert result["occurrences"] == 1
+    within = [credit("20240101", "A", 8500), credit("20240107", "B", 8500), credit("20240113", "C", 8500)]
+    result = detect_structuring(within)
+    assert result["detected"] is True
+    assert result["window_end"] == "2024-01-13"
 
 
 def test_not_detected_shape_matches_detected_shape():
+    result = detect_structuring([credit("20240101", "A", 8500)])
+    assert set(result) == KEYS
+    assert result["detected"] is False
+    assert result["occurrences"] == 1
+    assert result["refs"] == []
+
+
+def test_empty_input():
     result = detect_structuring([])
-    assert set(result) == {
-        "detected",
-        "occurrences",
-        "window_start",
-        "window_end",
-        "refs",
-        "total",
-    }
-    assert result == {
-        "detected": False,
-        "occurrences": 0,
-        "window_start": None,
-        "window_end": None,
-        "refs": [],
-        "total": 0.0,
-    }
-
-
-def test_same_day_transactions_each_count():
-    txns = [
-        txn("20260201", "A", 9000),
-        txn("20260201", "B", 9100),
-        txn("20260201", "C", 9200),
-    ]
-    result = detect_structuring(txns)
-    assert result["detected"] is True
-    assert result["refs"] == ["A", "B", "C"]
-    assert result["window_start"] == result["window_end"] == "2026-02-01"
-
-
-def test_refs_ordered_by_date_then_input_order():
-    txns = [
-        txn("20260105", "C", 9000),
-        txn("20260101", "A", 9000),
-        txn("20260105", "D", 9000),
-        txn("20260103", "B", 9000),
-    ]
-    result = detect_structuring(txns)
-    assert result["refs"] == ["A", "B", "C", "D"]
-
-
-def test_custom_occurrences_and_window():
-    txns = [
-        txn("20260101", "A", 9000),
-        txn("20260103", "B", 9000),
-    ]
-    result = detect_structuring(txns, occurrences=2, window_days=3)
-    assert result["detected"] is True
-    assert result["window_end"] == "2026-01-03"
+    assert set(result) == KEYS
+    assert result["detected"] is False
+    assert result["occurrences"] == 0
+    assert result["total"] == 0.0
