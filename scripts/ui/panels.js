@@ -61,7 +61,7 @@
         ${oracle.tests.map((t, i) => {
           const name = (oracle.test_names || [])[i];
           const bad = set.has(name);
-          return `<tr${bad ? ' style="background:rgba(255,94,94,.12)"' : ""}>
+          return `<tr${bad ? ' style="background:color-mix(in srgb, var(--crit) 10%, transparent)"' : ""}>
             <td class="num" style="width:34px">${String(i + 1).padStart(2, "0")}</td>
             <td class="${bad ? "crit" : ""}">${bad ? "<b>" : ""}${esc(t)}${bad ? "</b>" : ""}</td>
             <td style="width:92px">${bad ? chip("FAILED", "crit") : chip("pass", "good")}</td>
@@ -292,7 +292,7 @@
         <div class="bar"><select id="pt-probe"></select>
           <button class="btn primary" id="pt-send">send both to the agent</button></div>
         <textarea id="pt-payload" spellcheck="false"
-          style="width:100%;height:58px;background:#1a0606;color:#ffd9d9;
+          style="width:100%;height:58px;background:color-mix(in srgb, var(--crit) 6%, var(--page));color:var(--ink);
             border:1px solid var(--crit);border-radius:9px;padding:11px;
             font-family:var(--mono);font-size:11.5px;resize:vertical"></textarea>
         <div class="status sm quiet" style="margin-top:8px"></div>
@@ -318,7 +318,7 @@
       const body = esc(prompt || "");
       if (!line) return body;
       return body.split(esc(line)).join(
-        `<span style="background:#4a0d0d;color:#ffd9d9;padding:1px 2px">`
+        `<span style="background:color-mix(in srgb, var(--crit) 22%, transparent);color:var(--ink);padding:1px 2px">`
         + esc(line) + `</span>`);
     };
 

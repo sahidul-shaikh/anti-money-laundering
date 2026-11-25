@@ -49,25 +49,24 @@ window.Factory = (function () {
       const ly = cy + lr * Math.sin(mid * Math.PI / 180);
       return `<path class="quad" data-pillar="${p.id}"
           d="${donut(cx, cy, 118, 166, a0, a1)}"
-          fill="${on ? "#a100ff" : "#241733"}"
-          stroke="${on ? "#be82ff" : "#3a2b50"}" stroke-width="1"></path>
+          style="fill:${on ? "var(--acn-purple)" : "var(--panel-2)"};stroke:${
+            on ? "var(--acn-core)" : "var(--line)"}" stroke-width="1"></path>
         <text x="${lx}" y="${ly}" text-anchor="middle" dominant-baseline="middle"
           font-size="12.5" letter-spacing="0.6"
-          fill="${on ? "#ffffff" : "#a39bb0"}"
-          style="pointer-events:none">${p.verb}</text>`;
+          style="pointer-events:none;fill:${on ? "var(--on-accent)" : "var(--muted)"}">${p.verb}</text>`;
     }).join("");
 
     return `<div class="ring"><svg viewBox="0 0 360 360" role="img"
         aria-label="four capability quadrants">
-      <circle cx="${cx}" cy="${cy}" r="104" fill="none" stroke="#2e2040"></circle>
-      <circle cx="${cx}" cy="${cy}" r="78" fill="#120c1c" stroke="#460073"></circle>
+      <circle cx="${cx}" cy="${cy}" r="104" fill="none" style="stroke:var(--line)"></circle>
+      <circle cx="${cx}" cy="${cy}" r="78" style="fill:var(--page);stroke:var(--acn-deep)"></circle>
       ${seg}
       <text x="${cx}" y="${cy - 15}" text-anchor="middle" font-size="12"
-        letter-spacing="1.6" fill="#be82ff">AI</text>
+        letter-spacing="1.6" style="fill:var(--accent)">AI</text>
       <text x="${cx}" y="${cy + 2}" text-anchor="middle" font-size="12"
-        letter-spacing="1.6" fill="#ffffff">ENGINEERING</text>
+        letter-spacing="1.6">ENGINEERING</text>
       <text x="${cx}" y="${cy + 19}" text-anchor="middle" font-size="12"
-        letter-spacing="1.6" fill="#ffffff">FACTORY</text>
+        letter-spacing="1.6">FACTORY</text>
     </svg></div>`;
   }
 

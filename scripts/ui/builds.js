@@ -113,7 +113,7 @@
         <table><thead><tr><th>Part of the context window</th><th>Characters</th>
           <th style="width:42%">Share</th></tr></thead><tbody>
           ${mix.map((m) => `<tr><td>${m.label}</td><td class="mono">${num(m.chars)}</td>
-            <td><div style="height:7px;border-radius:4px;background:#a100ff;
+            <td><div style="height:7px;border-radius:4px;background:var(--acn-purple);
               width:${(100 * m.chars / r.chars).toFixed(1)}%"></div></td></tr>`).join("")}
         </tbody></table>`;
       host.querySelector("#ctx-prompt").textContent = r.prompt;
@@ -476,7 +476,7 @@
       const mid = (x1 + x2) / 2;
       const join = parents[to] > 1;
       return `<path d="M${x1},${y1} C${mid},${y1} ${mid},${y2} ${x2},${y2}" fill="none"
-        stroke="${join ? "#a100ff" : "#3a2f4d"}" stroke-width="${join ? 1.8 : 1.1}"
+        style="stroke:${join ? "var(--acn-purple)" : "var(--grey)"}" stroke-width="${join ? 1.8 : 1.1}"
         marker-end="url(#ar)"/>`;
     };
 
@@ -486,15 +486,15 @@
       const join = parents[n.phase_id] > 1;
       return `<g class="gnode" data-p="${n.phase_id}" style="cursor:pointer">
         <rect x="${p.x}" y="${p.y}" width="${W}" height="${H}" rx="8"
-          fill="${n.kind === "code" ? "#1b1030" : "#120c1c"}"
-          stroke="${n.gate ? "#a100ff" : join ? "#7500c0" : "#2e2040"}"
+          style="fill:${n.kind === "code" ? "var(--panel-2)" : "var(--page)"};stroke:${
+            n.gate ? "var(--acn-purple)" : join ? "var(--acn-core)" : "var(--line)"}"
           stroke-width="${n.gate ? 1.7 : 1}"/>
-        <text x="${p.x + 10}" y="${p.y + 18}" fill="#a39bb0" font-size="10">${n.n}${
+        <text x="${p.x + 10}" y="${p.y + 18}" style="fill:var(--muted)" font-size="10">${n.n}${
           n.gate ? " · GATE" : ""}${n.kind === "code" ? " · CODE" : ""}</text>
-        <text x="${p.x + 10}" y="${p.y + 34}" fill="#ffffff" font-size="11.5">${
+        <text x="${p.x + 10}" y="${p.y + 34}" style="fill:var(--ink)" font-size="11.5">${
           SHORT[n.phase_id] || n.phase_id}</text>
-        ${fork ? `<circle cx="${p.x + W}" cy="${p.y + H / 2}" r="3.2" fill="#be82ff"/>` : ""}
-        ${join ? `<circle cx="${p.x}" cy="${p.y + H / 2}" r="3.2" fill="#a100ff"/>` : ""}
+        ${fork ? `<circle cx="${p.x + W}" cy="${p.y + H / 2}" r="3.2" style="fill:var(--acn-light)"/>` : ""}
+        ${join ? `<circle cx="${p.x}" cy="${p.y + H / 2}" r="3.2" style="fill:var(--acn-purple)"/>` : ""}
       </g>`;
     };
 
@@ -502,7 +502,7 @@
       svg: `<svg viewBox="0 0 ${width} ${height}" width="100%" height="${height}"
           style="max-width:${width}px">
         <defs><marker id="ar" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6"
-          markerHeight="6" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#5b4b73"/></marker></defs>
+          markerHeight="6" orient="auto"><path d="M0,0 L8,4 L0,8 z" style="fill:var(--grey)"/></marker></defs>
         ${edges.map(edge).join("")}${nodes.map(box).join("")}</svg>`,
       edges: edges.length,
       depth: Math.max(...Object.values(depthOf)) + 1,
@@ -524,10 +524,10 @@
            ${kpi(g.forks, "forks")}${kpi(g.joins, "joins")}</div>
          <div style="overflow:auto;margin-top:16px">${g.svg}</div>
          <p class="sub" style="margin-top:10px">
-           <span style="color:#be82ff">&#9679;</span> feeds more than one stage &nbsp;
-           <span style="color:#a100ff">&#9679;</span> cannot start until several have passed &nbsp;
-           <span style="color:#a100ff">GATE</span> stops for a human &nbsp;
-           <span style="color:#be82ff">CODE</span> produces Python, verified by running tests</p>
+           <span style="color:var(--acn-light)">&#9679;</span> feeds more than one stage &nbsp;
+           <span style="color:var(--acn-purple)">&#9679;</span> cannot start until several have passed &nbsp;
+           <span style="color:var(--acn-purple)">GATE</span> stops for a human &nbsp;
+           <span style="color:var(--accent)">CODE</span> produces Python, verified by running tests</p>
          <div id="g-detail"></div>`);
 
     host.querySelectorAll(".gnode").forEach((el) => el.addEventListener("click", () => {
