@@ -1,7 +1,8 @@
 # Plan T-011: a light console in the Accenture palette
 
 From intent T-011. Base: main @ b0fa760. Status: accepted by Sahidul Shaikh
-(in session, 2026-11-25: light theme only, no toggle).
+(in session, 2026-11-25: light theme only, no toggle; then "it looks dull,
+make it more engaging, take ideas from the AI_for_ai_wireframe deck").
 
 ## Change
 | File | Change |
@@ -11,6 +12,13 @@ From intent T-011. Base: main @ b0fa760. Status: accepted by Sahidul Shaikh
 | `scripts/ui/builds.js` | Stage graph and context bar drawn with token colours |
 | `scripts/ui/panels.js`, `chat.js`, `inputs.js`, `runs.js` | Inline colours become tokens |
 | `checks/aml_check_04_build.py` | No hex or rgba colour in the UI JavaScript |
+
+Second pass, after the wireframe deck:
+| File | Change |
+|---|---|
+| `scripts/ui/factory.css` | Navy top bar with pill navigation; lavender strip with a deep purple active chip; lavender tiles, cards and rail; bold purple eyebrows; purple-outlined secondary buttons; purple accent on card headings; larger headings and KPI figures; hover lifts; a slowly turning orbit round the hub (off under reduced motion) |
+| `scripts/ui/factory.js` | Pillar icons (code, trend, monitor, shield); the ring becomes the wireframe's four-quadrant wheel with an icon per quadrant and the verbs on an inner band; icons on the hero mark and home tiles |
+| `scripts/ui/factory.html` | The brand mark carries the code icon |
 
 ## Proof
 - Screenshots of the home screen, all 18 panels, the rail and the document
