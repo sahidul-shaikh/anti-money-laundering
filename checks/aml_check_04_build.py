@@ -349,5 +349,11 @@ check("a planned prompt never states the withheld rules",
       not [f for f in WITHHELD_FACTS
            if f in planning.plan_prompt((ROOT / "tasks/T-006/intent.md").read_text(encoding="utf-8"), True)])
 
+print("\nthe console's colours live in one place")
+COLOUR = re.compile(r"(?<!&)#[0-9a-fA-F]{3,8}\b|rgba?\(")
+stray = [f"{p.name}:{n}" for p in sorted((ROOT / "scripts/ui").glob("*.js"))
+         for n, line in enumerate(p.read_text(encoding="utf-8").splitlines(), 1) if COLOUR.search(line)]
+check("no colour is written into the UI scripts", not stray, ", ".join(stray[:3]))
+
 print(f"\n{'ALL CHECKS PASS' if not failures else 'FAILURES: ' + ', '.join(failures)}")
 sys.exit(1 if failures else 0)

@@ -10,7 +10,7 @@
 
   const num = (n) => Number(n || 0).toLocaleString();
   const kpi = (v, l) => `<div class="kpi"><div class="v">${v}</div><div class="l">${l}</div></div>`;
-  const TEXTAREA = "width:100%;background:#080510;color:#cfc6da;"
+  const TEXTAREA = "width:100%;background:var(--code-bg);color:var(--code-ink);"
     + "border:1px solid var(--line);border-radius:9px;padding:12px;"
     + "font-family:var(--mono);font-size:11.5px;resize:vertical";
 

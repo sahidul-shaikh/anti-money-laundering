@@ -62,7 +62,7 @@
         "Uptime tells you the pipe is open. It does not tell you whether the control is "
         + "working, and it is the control a regulator asks about.",
         LAYERS.map(([name, question]) =>
-          `<h4 style="margin:18px 0 2px;font-size:12px;letter-spacing:1.2px;color:var(--acn-light)">
+          `<h4 style="margin:18px 0 2px;font-size:12px;letter-spacing:1.2px;color:var(--accent)">
              ${name}</h4><p class="sub" style="margin:0 0 4px">${question}</p>
            ${layerTable(name)}`).join(""))
       + card("Accuracy by scenario, which an aggregate would hide",
@@ -76,7 +76,7 @@
                <td class="num ${s.accuracy < 0.7 ? "crit" : s.accuracy < 0.9 ? "warn" : "good"}">
                  ${pct(s.accuracy)}</td>
                <td><div style="height:7px;border-radius:4px;background:${
-                 s.accuracy < 0.7 ? "#ff5e5e" : s.accuracy < 0.9 ? "#ffb020" : "#3ddc97"
+                 s.accuracy < 0.7 ? "var(--crit)" : s.accuracy < 0.9 ? "var(--warn)" : "var(--good)"
                };width:${(s.accuracy * 100).toFixed(0)}%"></div></td></tr>`).join("")}
          </tbody></table>`);
   });
