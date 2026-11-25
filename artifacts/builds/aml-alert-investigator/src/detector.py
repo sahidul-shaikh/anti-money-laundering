@@ -1,49 +1,43 @@
-"""Actimize AML-STR-CCE-INN-A-D01-DST structuring detector.
+"""Structuring detector for Actimize AML-STR rule AML-STR-CCE-INN-A-D01-DST.
 
-Rule as implemented:
-1. Qualify: lower_bound <= amount <= upper_bound (both inclusive) and
-   direction == "CREDIT" (inbound). The direction filter runs before counting.
-2. Window: a window of window_days spans window_days calendar days inclusive.
-   A qualifying item dated d_j falls in the window opened by d_i when
-   (d_j - d_i).days <= window_days - 1.
-3. Count: each qualifying item opens a window; count the qualifying items inside
-   it. The reported window has the largest count; ties go to the earliest.
-4. Fire: detected when that count >= occurrences.
-
-Output: window_start and window_end are the ISO-8601 (YYYY-MM-DD) dates of the
-first and last qualifying items in the reported window, not the calendar edges
-of the window. When not detected, occurrences still carries the largest window
-count, the window dates are None, refs is empty and total is 0.0.
+A credit qualifies when its amount lies within [lower_bound, upper_bound], both
+inclusive. The rule fires when qualifying credits reach `occurrences` within a
+window of `window_days` calendar days, both endpoints inclusive. Debits are
+ignored. When several windows qualify, the earliest is reported. `refs` and
+`total` cover the transactions in the reported window. When the rule does not
+fire, `occurrences` is the count of all qualifying credits.
 """
+
+import math
 from datetime import date, datetime
 
 
 def _parse_date(value: str) -> date:
-    """Parse a YYYYMMDD string."""
+    """Parse a YYYYMMDD string into a date."""
     return datetime.strptime(value, "%Y%m%d").date()
 
 
-def _qualifying(transactions: list[dict], lower_bound: float, upper_bound: float) -> list[dict]:
-    """Return inbound transactions within the amount bounds, sorted by date (stable)."""
+def _qualifying(
+    transactions: list[dict], lower_bound: float, upper_bound: float
+) -> list[tuple[date, str, float]]:
+    """Return (date, ref, amount) for qualifying credits, sorted by date."""
     hits = [
-        t
+        (_parse_date(t["date"]), t["ref"], t["amount"])
         for t in transactions
         if t["direction"] == "CREDIT" and lower_bound <= t["amount"] <= upper_bound
     ]
-    return sorted(hits, key=lambda t: _parse_date(t["date"]))
+    return sorted(hits, key=lambda hit: hit[0])
 
 
-def _largest_window(hits: list[dict], window_days: int) -> tuple[int, int]:
-    """Return (start, end) indices of the largest window; earliest wins ties."""
-    days = [_parse_date(t["date"]) for t in hits]
-    best_start, best_end = 0, 0
-    for i, opener in enumerate(days):
-        j = i
-        while j < len(days) and (days[j] - opener).days <= window_days - 1:
-            j += 1
-        if j - i > best_end - best_start:
-            best_start, best_end = i, j
-    return best_start, best_end
+def _first_window(
+    hits: list[tuple[date, str, float]], occurrences: int, window_days: int
+) -> list[tuple[date, str, float]] | None:
+    """Return the earliest window holding at least `occurrences` hits, else None."""
+    for start_date, _, _ in hits:
+        window = [h for h in hits if start_date <= h[0] and (h[0] - start_date).days < window_days]
+        if len(window) >= occurrences:
+            return window
+    return None
 
 
 def detect_structuring(
@@ -53,19 +47,18 @@ def detect_structuring(
     occurrences: int = 3,
     window_days: int = 14,
 ) -> dict:
-    """Detect a run of sub-threshold inbound amounts within a rolling window.
+    """Apply AML-STR-CCE-INN-A-D01-DST to a list of transactions.
 
-    Returns keys: detected, occurrences, window_start, window_end, refs, total.
-    window_start and window_end are ISO-8601 (YYYY-MM-DD) strings.
+    Each transaction needs `date` (YYYYMMDD), `ref`, `amount` and `direction`
+    (CREDIT or DEBIT). Returns detected, occurrences, window_start, window_end
+    (YYYY-MM-DD), refs and total (2dp).
     """
     hits = _qualifying(transactions, lower_bound, upper_bound)
-    start, end = _largest_window(hits, window_days)
-    window = hits[start:end]
-    count = len(window)
-    if count < occurrences:
+    window = _first_window(hits, occurrences, window_days)
+    if window is None:
         return {
             "detected": False,
-            "occurrences": count,
+            "occurrences": len(hits),
             "window_start": None,
             "window_end": None,
             "refs": [],
@@ -73,9 +66,9 @@ def detect_structuring(
         }
     return {
         "detected": True,
-        "occurrences": count,
-        "window_start": _parse_date(window[0]["date"]).isoformat(),
-        "window_end": _parse_date(window[-1]["date"]).isoformat(),
-        "refs": [t["ref"] for t in window],
-        "total": round(sum(t["amount"] for t in window), 2),
+        "occurrences": len(window),
+        "window_start": window[0][0].isoformat(),
+        "window_end": window[-1][0].isoformat(),
+        "refs": [ref for _, ref, _ in window],
+        "total": round(math.fsum(amount for _, _, amount in window), 2),
     }
