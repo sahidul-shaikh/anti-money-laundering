@@ -23,7 +23,20 @@ window.Factory = (function () {
 
   /* ---- the capability ring ------------------------------------------ */
 
-  const QUADRANT = { builds: 0, runs: 1, secures: 2, improves: 3 };
+  // Quadrant start angles, clockwise from the top, as in the wireframe:
+  // builds top left, improves top right, secures bottom right, runs bottom left.
+  const QUADRANT = { builds: 270, improves: 0, secures: 90, runs: 180 };
+
+  /** Line icons on a 24-unit grid, drawn in the current colour. */
+  const ICON = {
+    builds: '<path d="M8 6l-6 6 6 6M16 6l6 6-6 6M14 4l-4 16"/>',
+    improves: '<path d="M3 17l6-6 4 4 8-8M15 7h6v6"/>',
+    runs: '<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/>',
+    secures: '<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M8.5 12l2.5 2.5 4.5-5"/>',
+  };
+  const icon = (id, size, x, y) => `<svg ${x == null ? "" : `x="${x}" y="${y}"`}
+    width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+    stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">${ICON[id] || ""}</svg>`;
 
   function donut(cx, cy, rInner, rOuter, a0, a1) {
     const pt = (r, a) => {
@@ -37,36 +50,42 @@ window.Factory = (function () {
       + ` L${x3} ${y3} A${rInner} ${rInner} 0 ${large} 0 ${x4} ${y4} Z`;
   }
 
+  const polar = (cx, cy, r, a) => {
+    const t = (a - 90) * Math.PI / 180;
+    return [cx + r * Math.cos(t), cy + r * Math.sin(t)];
+  };
+
+  /** The capability wheel: four quadrants with their icons, the verbs on an inner band. */
   function ring(pillar) {
-    const cx = 180, cy = 180;
+    const cx = 200, cy = 200;
     const seg = state.pillars.map((p) => {
-      const q = QUADRANT[p.id];
-      const a0 = -45 + q * 90, a1 = a0 + 90;
+      const a0 = QUADRANT[p.id], mid = a0 + 45;
       const on = p.id === pillar.id;
-      const mid = (a0 + a1) / 2 - 90;
-      const lr = 142;
-      const lx = cx + lr * Math.cos(mid * Math.PI / 180);
-      const ly = cy + lr * Math.sin(mid * Math.PI / 180);
-      return `<path class="quad" data-pillar="${p.id}"
-          d="${donut(cx, cy, 118, 166, a0, a1)}"
-          style="fill:${on ? "var(--acn-purple)" : "var(--panel-2)"};stroke:${
-            on ? "var(--acn-core)" : "var(--line)"}" stroke-width="1"></path>
-        <text x="${lx}" y="${ly}" text-anchor="middle" dominant-baseline="middle"
-          font-size="12.5" letter-spacing="0.6"
-          style="pointer-events:none;fill:${on ? "var(--on-accent)" : "var(--muted)"}">${p.verb}</text>`;
+      const [ix, iy] = polar(cx, cy, 146, mid);
+      const [vx, vy] = polar(cx, cy, 82, mid);
+      return `<g class="quad" data-pillar="${p.id}"
+          style="color:${on ? "var(--on-accent)" : "var(--acn-core)"}">
+          <path d="${donut(cx, cy, 108, 194, a0 + 1, a0 + 89)}"
+            style="fill:${on ? "var(--acn-purple)" : "var(--lav)"};stroke:var(--page)" stroke-width="5"/>
+          ${icon(p.id, 40, ix - 20, iy - 20)}
+        </g>
+        <text x="${vx}" y="${vy}" text-anchor="middle" dominant-baseline="middle"
+          font-size="11.5" letter-spacing="0.3" style="pointer-events:none">${p.verb}</text>`;
     }).join("");
 
-    return `<div class="ring"><svg viewBox="0 0 360 360" role="img"
+    return `<div class="ring"><svg viewBox="0 0 400 400" role="img"
         aria-label="four capability quadrants">
-      <circle cx="${cx}" cy="${cy}" r="104" fill="none" style="stroke:var(--line)"></circle>
-      <circle cx="${cx}" cy="${cy}" r="78" style="fill:var(--page);stroke:var(--acn-deep)"></circle>
+      <circle cx="${cx}" cy="${cy}" r="106" style="fill:var(--panel-2);stroke:var(--lav-strong)"/>
       ${seg}
-      <text x="${cx}" y="${cy - 15}" text-anchor="middle" font-size="12"
-        letter-spacing="1.6" style="fill:var(--accent)">AI</text>
-      <text x="${cx}" y="${cy + 2}" text-anchor="middle" font-size="12"
-        letter-spacing="1.6">ENGINEERING</text>
-      <text x="${cx}" y="${cy + 19}" text-anchor="middle" font-size="12"
-        letter-spacing="1.6">FACTORY</text>
+      <circle cx="${cx}" cy="${cy}" r="54" style="fill:var(--page);stroke:var(--lav-strong)" stroke-width="2"/>
+      <circle class="orbit" cx="${cx}" cy="${cy}" r="59" fill="none"
+        style="stroke:var(--acn-light)" stroke-width="1.5" stroke-dasharray="3 7"/>
+      <text x="${cx}" y="${cy - 14}" text-anchor="middle" font-size="12"
+        letter-spacing="1.6" style="fill:var(--acn-purple)">AI</text>
+      <text x="${cx}" y="${cy + 3}" text-anchor="middle" font-size="12"
+        letter-spacing="1.4">ENGINEERING</text>
+      <text x="${cx}" y="${cy + 20}" text-anchor="middle" font-size="12"
+        letter-spacing="1.4">FACTORY</text>
     </svg></div>`;
   }
 
@@ -120,6 +139,7 @@ window.Factory = (function () {
       <div class="home-grid">
         ${tiles.map((p, i) => `<button class="home-tile ${i === 0 ? "lead" : ""}"
             data-go="${p.id}" ${p.status === "next" ? "disabled" : ""}>
+          <span class="ic">${icon(p.id, 30)}</span>
           <span class="t">${esc(p.title)}</span>
           <span class="d">${p.disciplines.map((d) => esc(d.title)).join(" &middot; ")}</span>
         </button>`).join("")}
@@ -136,7 +156,7 @@ window.Factory = (function () {
       <div>
         <div class="eyebrow"><b>0${p.index}</b> / 04 &nbsp;&middot;&nbsp; Capability</div>
         <div class="hero-title">
-          <div class="hero-mark">&gt;</div>
+          <div class="hero-mark">${icon(p.id, 36)}</div>
           <h1>${p.title}</h1>
         </div>
         <p class="promise">${esc(p.promise)}</p>
@@ -264,5 +284,5 @@ window.Factory = (function () {
   // have all run let a slow script lose the race, and the first route showed
   // "Not wired yet". DOMContentLoaded fires only after every script has run.
   document.addEventListener("DOMContentLoaded", boot);
-  return { api, esc, el, register, state, go };
+  return { api, esc, el, register, state, go, icon };
 })();
