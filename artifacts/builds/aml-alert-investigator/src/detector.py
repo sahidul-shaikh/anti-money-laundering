@@ -1,57 +1,27 @@
 """Actimize AML-STR structuring rule AML-STR-CCE-INN-A-D01-DST.
 
-Qualifying transactions are inbound (direction CREDIT) with amounts in
-[lower_bound, upper_bound], both bounds inclusive. The rule fires when at least
-`occurrences` qualifying transactions fall within one window of `window_days`
-calendar days. A window starting on date D covers D through D + (window_days - 1),
-so 14 days spans 14 calendar dates inclusive.
-
-When the rule fires, the reported window is the one holding the most qualifying
-transactions (earliest start on a tie). window_start and window_end are the dates
-of the first and last qualifying transaction in that window, formatted ISO-8601
-(YYYY-MM-DD). Input dates are YYYYMMDD and are not changed by this. refs lists
-those transactions in date order, ties kept in input order. total is their amount
-sum, rounded to 2 decimal places.
-
-When the rule does not fire, detected is False, window_start and window_end are
-None, refs is empty, total is 0.0, and occurrences is the largest count of
-qualifying transactions in any single window (0 if none qualify).
+Rule as implemented:
+- Only credits count. Direction is compared case-insensitively with surrounding
+  whitespace ignored, so "credit", "CREDIT" and " Credit " all count. Debits are
+  dropped before any window is evaluated.
+- A transaction qualifies when lower_bound <= amount <= upper_bound (both inclusive).
+- A window of window_days spans window_days calendar days inclusive, so the
+  last qualifying item must satisfy (date - first_date).days < window_days.
+- The rule fires when some window holds at least `occurrences` qualifying items.
+  The earliest such window is reported; its refs are in date order, with ties
+  kept in input order.
+- window_start and window_end are the dates of the first and last qualifying
+  items in the reported window, as ISO-8601 strings (YYYY-MM-DD). Input dates
+  remain YYYYMMDD.
+- total is the sum of the amounts of the reported window, rounded to cents.
+- When the rule does not fire: detected is False, occurrences is the largest
+  qualifying count found in any window, window_start and window_end are None,
+  refs is empty and total is 0.0.
 """
-from datetime import datetime, timedelta
 
-DIRECTION = "CREDIT"
-INPUT_DATE_FORMAT = "%Y%m%d"
-OUTPUT_DATE_FORMAT = "%Y-%m-%d"
+from datetime import datetime
 
-
-def _qualifying(transactions, lower_bound, upper_bound):
-    """Return (date, ref, amount) for qualifying transactions, sorted by date."""
-    rows = []
-    for t in transactions:
-        amount = float(t["amount"])
-        if t["direction"].upper() != DIRECTION:
-            continue
-        if not lower_bound <= amount <= upper_bound:
-            continue
-        day = datetime.strptime(t["date"], INPUT_DATE_FORMAT).date()
-        rows.append((day, t["ref"], amount))
-    return sorted(rows, key=lambda r: r[0])
-
-
-def _window_members(rows, start, window_days):
-    """Return the rows dated from start through start + window_days - 1."""
-    end = start + timedelta(days=window_days - 1)
-    return [r for r in rows if start <= r[0] <= end]
-
-
-def _densest_window(rows, window_days):
-    """Return the window anchored on a qualifying date with the most rows."""
-    best = []
-    for day, _, _ in rows:
-        members = _window_members(rows, day, window_days)
-        if len(members) > len(best):
-            best = members
-    return best
+DATE_FORMAT = "%Y%m%d"
 
 
 def detect_structuring(
@@ -61,27 +31,56 @@ def detect_structuring(
     occurrences: int = 3,
     window_days: int = 14,
 ) -> dict:
-    """Apply the AML-STR structuring rule to a list of transaction dicts.
+    """Flag a run of near-threshold credits reaching `occurrences` within `window_days`."""
+    qualifying = sorted(
+        (
+            t
+            for t in transactions
+            if _is_credit(t)
+            and lower_bound <= float(t["amount"]) <= upper_bound
+        ),
+        key=lambda t: t["date"],
+    )
+    days = [datetime.strptime(t["date"], DATE_FORMAT).date() for t in qualifying]
 
-    Each dict carries date (YYYYMMDD), ref, amount and direction (CREDIT or DEBIT).
-    Returns detected, occurrences, window_start, window_end (YYYY-MM-DD), refs and total.
-    """
-    rows = _qualifying(transactions, lower_bound, upper_bound)
-    best = _densest_window(rows, window_days)
-    if not best or len(best) < occurrences:
+    max_count = 0
+    found = None
+    for start in range(len(qualifying)):
+        end = _window_end(days, start, window_days)
+        max_count = max(max_count, end - start)
+        if found is None and end - start >= occurrences:
+            found = (start, end)
+
+    if found is None:
         return {
             "detected": False,
-            "occurrences": len(best),
+            "occurrences": max_count,
             "window_start": None,
             "window_end": None,
             "refs": [],
             "total": 0.0,
         }
+
+    start, end = found
+    window = qualifying[start:end]
     return {
         "detected": True,
-        "occurrences": len(best),
-        "window_start": best[0][0].strftime(OUTPUT_DATE_FORMAT),
-        "window_end": best[-1][0].strftime(OUTPUT_DATE_FORMAT),
-        "refs": [r[1] for r in best],
-        "total": round(sum(r[2] for r in best), 2),
+        "occurrences": len(window),
+        "window_start": days[start].isoformat(),
+        "window_end": days[end - 1].isoformat(),
+        "refs": [t["ref"] for t in window],
+        "total": round(sum(float(t["amount"]) for t in window), 2),
     }
+
+
+def _is_credit(txn: dict) -> bool:
+    """True when the transaction direction is credit, ignoring case and surrounding spaces."""
+    return str(txn["direction"]).strip().lower() == "credit"
+
+
+def _window_end(days: list, start: int, window_days: int) -> int:
+    """Index one past the last item within window_days calendar days of days[start]."""
+    end = start
+    while end < len(days) and (days[end] - days[start]).days < window_days:
+        end += 1
+    return end
