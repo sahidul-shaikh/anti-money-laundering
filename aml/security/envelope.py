@@ -51,8 +51,9 @@ def render_references(
 
     lines = [f"  {t.ref}: {t.reference_text}" for t in carrying]
 
-    if not guardrail:
-        # Naive: the external text is simply part of the alert body.
-        return "\nPAYMENT REFERENCES\n" + "\n".join(lines)
+    # if not guardrail:
+    #     # Naive: the external text is simply part of the alert body.
+    #     return "\nPAYMENT REFERENCES\n" + "\n".join(lines)
 
-    return "\n" + PREAMBLE + "\n" + OPEN + "\n" + "\n".join(lines) + "\n" + CLOSE
+    # return "\n" + PREAMBLE + "\n" + OPEN + "\n" + "\n".join(lines) + "\n" + CLOSE
+    return "\nPAYMENT REFERENCES\n" + "\n".join(lines)
